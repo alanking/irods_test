@@ -4,15 +4,14 @@ import os, time
 
 FLAG_FILE = '/var/lib/irods/setup_complete'
 
-def get_project(name):
-    return compose.cli.command.get_project(name)
-
 def wait_for_setup_to_finish(dc, c, timeout_in_seconds=0):
     start_time = time.time()
 
     while time.time() - start_time < timeout_in_seconds:
         exec_result = c.exec_run('stat {}'.format(FLAG_FILE))
+
         print(exec_result[1])
+
         if exec_result[0] == 0:
             break
 
@@ -21,7 +20,7 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds=0):
 def execute_on_project(project_name, container_name, command, dc=docker.from_env()):
     try:
         # Get the context for the Compose file
-        p = get_project(project_name)
+        p = compose.cli.command.get_project(project_name)
 
         # Bring up the services
         containers = p.up()
