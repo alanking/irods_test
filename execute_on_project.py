@@ -10,9 +10,8 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds=0):
     while time.time() - start_time < timeout_in_seconds:
         exec_result = c.exec_run('stat {}'.format(FLAG_FILE))
 
-        print(exec_result[1])
-
         if exec_result[0] == 0:
+            print('iRODS has been set up - continuing execution')
             break
 
         time.sleep(1)
