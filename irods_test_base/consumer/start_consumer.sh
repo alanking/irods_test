@@ -5,8 +5,13 @@ until nc -z icat.example.org 1247; do
     sleep 1
 done
 
-# Set up iRODS.
-python /var/lib/irods/scripts/setup_irods.py < /irods_consumer.input
+# Set up iRODS if not already done
+if [ ! -e /var/lib/irods/setup_complete ]
+    then
+        python /var/lib/irods/scripts/setup_irods.py < /irods_consumer.input
+fi
+
+touch /var/lib/irods/setup_complete
 
 # start server
 su - irods -c "/var/lib/irods/irodsctl restart"
