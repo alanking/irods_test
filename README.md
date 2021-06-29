@@ -12,12 +12,12 @@ In this repository, the most basic set up is as follows:
 
 To run the tests, the following steps must be performed:
 
-Stand up the topology
+1. Stand up the topology
 ```
 $ docker-compose up
 ```
 
-Run the tests while pointed at the container using run\_tests.py
+2. Run the tests while pointed at the container using run\_tests.py
 ```
 # runs the entire test suite on the CSP as if it were not in a topology (i.e. "core tests")
 $ docker exec --user irods --workdir /var/lib/irods irods_test_base_irods-catalog-provider1_1 python ./scripts/run_tests.py --run_python_suite
@@ -26,7 +26,7 @@ $ docker exec --user irods --workdir /var/lib/irods irods_test_base_irods-catalo
 $ docker exec --user irods --workdir /var/lib/irods irods_test_base_irods-catalog-consumer-resource1_1 python ./scripts/run_tests.py --topology=resource --run_s test_ils
 ```
 
-Tear down the topology (removes containers!)
+3. Tear down the topology (removes containers!)
 ```
 $ docker-compose down
 ```
