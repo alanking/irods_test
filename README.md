@@ -34,6 +34,16 @@ $ docker-compose down
 The latest version of iRODS available in the repository for the given platform is installed by default.
 Custom packages can be installed manually but in the future this should be more automated and allow for specifying versions.
 
+## run\_irods\_test.py
+
+The steps above have been captured in a python script here.
+
+Example usage:
+```
+# runs specific test module on the CSC (i.e. "topology from resource")
+python run_tests_in_zone.py --setup_timeout 30 --container irods_test_base_irods-catalog-consumer-resource1_1 'python ./scripts/run_tests.py --topology=resource --run_s test_ils.Test_Ils.test_option_d_with_collections__issue_5506'
+```
+
 ## Future Work
  - Copy out log files to a specified volume mount
  - Additional OS/DB support
