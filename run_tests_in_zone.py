@@ -1,10 +1,10 @@
-import compose.cli.command
 import docker
-import os, time
 
 FLAG_FILE = '/var/lib/irods/setup_complete'
 
 def wait_for_setup_to_finish(dc, c, timeout_in_seconds=0):
+    import time
+
     start_time = time.time()
 
     while time.time() - start_time < timeout_in_seconds:
@@ -16,7 +16,9 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds=0):
 
         time.sleep(1)
 
-def execute_on_project(project_name, container_name, command, dc=docker.from_env()):
+def execute_on_project(project_name, container_name, command, dc):
+    import compose.cli.command
+
     try:
         # Get the context for the Compose file
         p = compose.cli.command.get_project(project_name)
@@ -53,5 +55,23 @@ def execute_on_project(project_name, container_name, command, dc=docker.from_env
     finally:
         return p.down(include_volumes = True, remove_image_type = False)
 
-if __name__ == '__main__':
-    exit(execute_on_project('irods_test_base', 'irods_test_base_irods-catalog-consumer-resource1_1', 'echo "hello"'))
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Run iRODS tests in a consistent environment.')
+    parser.add_argument('command', metavar='COMMAND', type=str,
+                        help='The string representing the command to be run in the container')
+    parser.add_argument('--container', metavar='CONTAINER', type=str,
+                        default='irods_test_base_irods-catalog-provider_1',
+                        help='The name of the container on which the command will run')
+    #parser.add_argument('--platform', metavar='PLATFORM', type=str,
+                        #help='The tag of the base Docker image to use (e.g. centos:7)')
+    #parser.add_argument('--database', metavar='DATABASE', type=str,
+                        #help='The tag of the database container to use (e.g. postgres:10.12')
+
+    args = parser.parse_args()
+
+    # TODO: modify project name based on selected platform and DB
+    project_name = 'irods_test_base'
+
+    exit(execute_on_project(project_name, args.container, args.command, docker.from_env()))
