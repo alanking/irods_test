@@ -10,6 +10,8 @@ In this repository, the most basic set up is as follows:
  - 3 Catalog Service Consumers
     - Each is aliased within the docker network to be recognizable in a manner expected by the tests
 
+Any docker-compose project can be substituted/added for support so long as it meets the requirements for running iRODS tests (i.e. additional OS/DB support).
+
 To run the tests, the following steps must be performed:
 
 1. Stand up the topology
