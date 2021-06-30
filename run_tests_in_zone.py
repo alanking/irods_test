@@ -1,8 +1,9 @@
+import compose.cli.command
 import docker
-
 
 class execution_context:
     FLAG_FILE = '/var/lib/irods/setup_complete'
+    LOGFILES_PATH = '/var/lib/irods/log'
     OUTPUT_ENCODING = 'utf-8'
 
     def __init__(self, project_name, args, dc):
@@ -11,6 +12,20 @@ class execution_context:
         self.commands       = list(args.commands)
         self.setup_timeout  = args.setup_timeout
         self.docker_client  = dc
+        self.database       = args.database
+        self.platform       = args.platform
+
+        if args.job_name:
+            self.job_name = args.job_name
+        else:
+            import uuid
+            self.job_name = str(uuid.uuid4())
+
+        if args.log_output_directory:
+            self.log_output_directory = args.log_output_directory
+        else:
+            import tempfile
+            self.log_output_directory = tempfile.mkdtemp(prefix=self.project_name)
 
 def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
     import time
@@ -36,7 +51,6 @@ def execute_command_with_output(c, command):
     ec = 0
 
     # iRODS tests are meant to be run as the irods service account in the /var/lib/irods directory
-    # TODO: loop through commands and run them serially
     exec_out = c.exec_run(command, user='irods', workdir='/var/lib/irods', stream=True)
 
     try:
@@ -51,10 +65,34 @@ def execute_command_with_output(c, command):
 
     return ec
 
-def execute_on_project(ctx):
-    import compose.cli.command
+def collect_logs(ctx, containers):
+    import os.path
 
+    od = os.path.join(ctx.log_output_directory, ctx.project_name, ctx.platform, ctx.database, ctx.job_name)
+    if not os.path.exists(od):
+        os.makedirs(od)
+
+    for c in containers:
+        log_archive_path = os.path.join(od, c.name)
+
+        print('saving log [{}]'.format(log_archive_path))
+
+        try:
+            # TODO: get server version to determine path of the log files
+            bits, stat = ctx.docker_client.containers.get(c.name).get_archive(execution_context.LOGFILES_PATH)
+            print('stat [{0}] [{1}]'.format(execution_context.LOGFILES_PATH, stat))
+
+            with open(log_archive_path, 'wb') as f:
+                for chunk in bits:
+                    f.write(chunk)
+
+        except Exception as e:
+            print('failed to collect log [{}]'.format(log_archive_path))
+            print(e)
+
+def execute_on_project(ctx):
     ec = 0
+    containers = list()
 
     try:
         # Get the context for the Compose file
@@ -71,6 +109,7 @@ def execute_on_project(ctx):
 
         # TODO: install desired version here
 
+        # Serially execute the list of commands provided in the input
         for command in ctx.commands:
             print('----\nexecuting command [{}]'.format(command))
             ec = execute_command_with_output(c, command)
@@ -87,6 +126,9 @@ def execute_on_project(ctx):
         #print('we did it')
 
     finally:
+        print('collecting logs [{}]'.format(ctx.log_output_directory))
+        collect_logs(ctx, containers)
+
         p.down(include_volumes = True, remove_image_type = False)
 
     return ec
@@ -97,15 +139,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run iRODS tests in a consistent environment.')
     parser.add_argument('commands', metavar='COMMANDS', nargs='+',
                         help='Space-delimited list of commands to be run')
-    parser.add_argument('--container', metavar='CONTAINER', type=str,
-                        default='irods_test_base_irods-catalog-provider_1',
+    parser.add_argument('--container', metavar='CONTAINER', type=str, default='irods_test_base_irods-catalog-provider_1',
                         help='The name of the container on which the command will run')
-    parser.add_argument('--setup_timeout', metavar='SETUP_TIMEOUT_IN_SECONDS', type=int, default=10,
+    parser.add_argument('--setup_timeout', metavar='SETUP_TIMEOUT_IN_SECONDS', type=int, default=30,
                         help='How many seconds to wait before timing out while waiting on iRODS server to be set up.')
-    #parser.add_argument('--platform', metavar='PLATFORM', type=str,
-                        #help='The tag of the base Docker image to use (e.g. centos:7)')
-    #parser.add_argument('--database', metavar='DATABASE', type=str,
-                        #help='The tag of the database container to use (e.g. postgres:10.12')
+    parser.add_argument('--log_output_directory', metavar='FULLPATH_TO_DIRECTORY_FOR_OUTPUT_LOGS', type=str,
+                        help='Full path to local directory for output logs which will be copied from the containers.')
+    parser.add_argument('--platform', metavar='PLATFORM', type=str, default='ubuntu:18.04',
+                        help='The tag of the base Docker image to use (e.g. centos:7)')
+    parser.add_argument('--database', metavar='DATABASE', type=str, default='postgres:10.12',
+                        help='The tag of the database container to use (e.g. postgres:10.12')
+    parser.add_argument('--job_name', metavar='JOB_NAME', type=str,
+                        help='Name of the test run')
 
     args = parser.parse_args()
 
