@@ -15,10 +15,10 @@ if [ ! -e /var/lib/irods/setup_complete ]
         python /var/lib/irods/scripts/setup_irods.py < /irods_provider.input
 fi
 
-touch /var/lib/irods/setup_complete
-
 # run the server
 su - irods -c "/var/lib/irods/irodsctl restart"
+
+touch /var/lib/irods/setup_complete
 
 # Keep container running if the test fails.
 tail -f /dev/null
