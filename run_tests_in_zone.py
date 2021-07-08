@@ -36,6 +36,9 @@ def is_catalog_database_container(container):
 def is_catalog_service_provider_container(container):
     return 'provider' in container.name
 
+def is_database_plugin(p):
+    return 'database' in p
+
 def execute_command(container, command, user='', workdir=None, verbose=True):
     if verbose:
         print('executing on [{0}] [{1}]'.format(container.name, command))
@@ -80,6 +83,8 @@ def collect_logs(ctx, containers):
         os.makedirs(od)
 
     for c in containers:
+        if is_catalog_database_container(c): continue
+
         log_archive_path = os.path.join(od, c.name)
 
         print('saving log [{}]'.format(log_archive_path))
@@ -101,13 +106,11 @@ def put_packages_in_container(container, tarfile_path):
     # Copy packages tarball into container
     path_to_packages_dir_in_container = '/' + os.path.basename(tarfile_path)[:len('.tar') * -1]
 
-    execute_command(container, 'mkdir -p ' + path_to_packages_dir_in_container, verbose=False)
+    print('putting tarfile [{0}] in container [{1}] at [{2}]'.format(
+        tarfile_path, container.name, path_to_packages_dir_in_container))
 
     with open(tarfile_path, 'rb') as tf:
-        print('putting tarfile [{0}] in container [{1}] at [{2}]'.format(
-            tarfile_path, container.name, path_to_packages_dir_in_container))
-
-        if not container.put_archive(path_to_packages_dir_in_container, tf):
+        if not container.put_archive('/', tf):
             raise RuntimeError('failed to put packages archive into container [{}]'.format(container.name))
 
     return path_to_packages_dir_in_container
@@ -116,11 +119,14 @@ def install_package(c, p):
     # TODO: figure this out
     cmd = 'dpkg -i {}'.format(p)
 
-    if execute_command(c, cmd) != 0:
-        raise RuntimeError('failed to install package [{0}] on [{1}]'.format(p, c.name))
+    #ec = execute_command(c, cmd)
 
-def is_database_plugin(p):
-    return 'database' in p
+    #if ec != 0:
+        #raise RuntimeError('failed to install package [{0}] on [{1}] [ec=[{2}]]'.format(p, c.name, ec))
+
+    #return ec
+
+    execute_command(c, cmd)
 
 def create_tarfile(ctx, members):
     import tarfile
@@ -162,8 +168,9 @@ def get_package_list(ctx):
     return packages
 
 def restart_irods(c):
-    if execute_command(c, '/var/lib/irods/irodsctl restart', user='irods') != 0:
-        raise RuntimeError('Failed to restart iRODS server [{}]'.format(c.name))
+    #if execute_command(c, '/var/lib/irods/irodsctl restart', user='irods') != 0:
+        #raise RuntimeError('Failed to restart iRODS server [{}]'.format(c.name))
+    execute_command(c, '/var/lib/irods/irodsctl restart', user='irods')
 
 def install_custom_packages(ctx, containers):
     # TODO: figure this out
@@ -188,7 +195,7 @@ def install_custom_packages(ctx, containers):
         for p in packages:
             if is_database_plugin(p) and not is_catalog_service_provider_container(c): continue
 
-            install_package(container, os.path.join(path_to_packages_in_container, os.path.basename(p)))
+            install_package(container, p)
 
         restart_irods(container)
 
