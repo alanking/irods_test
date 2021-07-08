@@ -2,8 +2,6 @@ import compose.cli.command
 import docker
 
 class execution_context:
-    FLAG_FILE = '/var/lib/irods/setup_complete'
-    LOGFILES_PATH = '/var/lib/irods/log'
     OUTPUT_ENCODING = 'utf-8'
 
     def __init__(self, project_name, args, dc):
@@ -30,13 +28,15 @@ class execution_context:
 def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
     import time
 
+    FLAG_FILE = '/var/lib/irods/setup_complete'
+
     print('waiting for iRODS to finish setting up [{}]'.format(c.name))
 
     start_time = time.time()
     now = start_time
 
     while now - start_time < timeout_in_seconds:
-        exec_result = c.exec_run('stat {}'.format(execution_context.FLAG_FILE))
+        exec_result = c.exec_run('stat {}'.format(FLAG_FILE))
 
         if exec_result.exit_code == 0:
             print('iRODS has been set up (waited [{}] seconds)'.format(str(now - start_time)))
@@ -47,11 +47,11 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
 
     raise SetupTimeoutError('timed out while waiting for iRODS to finish setting up')
 
-def execute_command_with_output(c, command):
+def execute_command_with_output(container, command):
     ec = 0
 
     # iRODS tests are meant to be run as the irods service account in the /var/lib/irods directory
-    exec_out = c.exec_run(command, user='irods', workdir='/var/lib/irods', stream=True)
+    exec_out = container.exec_run(command, user='irods', workdir='/var/lib/irods', stream=True)
 
     try:
         # Stream output from the executing command
@@ -68,6 +68,8 @@ def execute_command_with_output(c, command):
 def collect_logs(ctx, containers):
     import os.path
 
+    LOGFILES_PATH = '/var/lib/irods/log'
+
     od = os.path.join(ctx.log_output_directory, ctx.project_name, ctx.platform, ctx.database, ctx.job_name)
     if not os.path.exists(od):
         os.makedirs(od)
@@ -79,8 +81,8 @@ def collect_logs(ctx, containers):
 
         try:
             # TODO: get server version to determine path of the log files
-            bits, stat = ctx.docker_client.containers.get(c.name).get_archive(execution_context.LOGFILES_PATH)
-            print('stat [{0}] [{1}]'.format(execution_context.LOGFILES_PATH, stat))
+            bits, stat = ctx.docker_client.containers.get(c.name).get_archive(LOGFILES_PATH)
+            print('stat [{0}] [{1}]'.format(LOGFILES_PATH, stat))
 
             with open(log_archive_path, 'wb') as f:
                 for chunk in bits:
@@ -139,7 +141,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run iRODS tests in a consistent environment.')
     parser.add_argument('commands', metavar='COMMANDS', nargs='+',
                         help='Space-delimited list of commands to be run')
-    parser.add_argument('--container', metavar='CONTAINER', type=str, default='irods_test_base_irods-catalog-provider_1',
+    parser.add_argument('--run_on', metavar='CONTAINER', type=str, default='irods_test_base_irods-catalog-provider_1',
                         help='The name of the container on which the command will run')
     parser.add_argument('--setup_timeout', metavar='SETUP_TIMEOUT_IN_SECONDS', type=int, default=30,
                         help='How many seconds to wait before timing out while waiting on iRODS server to be set up.')
