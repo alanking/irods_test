@@ -26,6 +26,28 @@ class execution_context:
             import tempfile
             self.log_output_directory = tempfile.mkdtemp(prefix=self.project_name)
 
+    def database_type(self):
+        return self.database(':')[0]
+
+def is_catalog_database_container(container):
+    return 'icat' in container.name
+
+def is_catalog_service_provider_container(container):
+    return 'provider' in container.name
+
+def execute_command(container, command, user='', workdir=None, verbose=True):
+    exec_out = container.exec_run(command, user=user, workdir=workdir, stream=verbose)
+
+    try:
+        # Stream output from the executing command
+        while verbose:
+            print(next(exec_out.output).decode(execution_context.OUTPUT_ENCODING), end='')
+
+    except StopIteration:
+        print('\ndone')
+
+    return exec_out.exit_code
+
 def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
     import time
 
@@ -37,9 +59,7 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
     now = start_time
 
     while now - start_time < timeout_in_seconds:
-        exec_result = c.exec_run('stat {}'.format(FLAG_FILE))
-
-        if exec_result.exit_code == 0:
+        if execute_command(c, 'stat {}'.format(FLAG_FILE), verbose=False) == 0:
             print('iRODS has been set up (waited [{}] seconds)'.format(str(now - start_time)))
             return
 
@@ -47,24 +67,6 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
         now = time.time()
 
     raise SetupTimeoutError('timed out while waiting for iRODS to finish setting up')
-
-def execute_command_with_output(container, command):
-    ec = 0
-
-    # iRODS tests are meant to be run as the irods service account in the /var/lib/irods directory
-    exec_out = container.exec_run(command, user='irods', workdir='/var/lib/irods', stream=True)
-
-    try:
-        # Stream output from the executing command
-        while True:
-            print(next(exec_out.output).decode(execution_context.OUTPUT_ENCODING), end='')
-
-        ec = exec_out.exit_code
-
-    except StopIteration:
-        print('\ndone')
-
-    return ec
 
 def collect_logs(ctx, containers):
     import os.path
@@ -93,8 +95,60 @@ def collect_logs(ctx, containers):
             print('failed to collect log [{}]'.format(log_archive_path))
             print(e)
 
-def install_custom_packages(docker_client, path_to_packages, containers):
-    for c in containers:
+def put_packages_in_container(container, tarfile_path):
+    # Copy packages tarball into container
+    path_to_tarfile_in_container = '/' + os.path.basename(tarfile_path)
+    path_to_packages_dir_in_container = path_to_tarfile_in_container[:-4]
+
+    with tarfile.open(tarfile_path, 'r') as tf:
+        data = tf.read()
+        if not c.put_archive(path_to_tarfile_in_container, data):
+            raise RuntimeError('failed to put packages archive into container [{}]'.format(c.name))
+
+        # untar into directory in /
+        tf.extractall(path=path_to_packages_dir_in_container)
+
+    return path_to_packages_dir_in_container
+
+def install_package(p):
+    return 'dpkg -i {}'.format(
+
+def install_custom_packages(ctx, custom_packages_path):
+    import irods_python_ci_utilities.get_package_suffix
+    import glob
+    import tarfile
+
+    packages = list()
+    for p in ['irods-runtime', 'irods-icommands', 'irods-server']:
+        packages.append(glob.glob(os.path.join(custom_packages_path, p + '*.{}'.format(package_suffix)))[0])
+
+    # Create a tarfile with the packages
+    tarfile_name = ctx.job_name + '_packages.tar'
+    tarfile_path = os.path.join(custom_packages_path, tarfile_name)
+
+    package_suffix = irods_python_ci_utilities.get_package_suffix()
+
+    with tarfile.open(tarfile_path, 'w') as f:
+        for p in packages:
+            f.add(glob.glob(os.path.join(custom_packages_path, p + '*.{0}'.format(package_suffix)))[0])
+
+    for c in ctx.containers:
+        # Only the iRODS containers need to have packages installed
+        if is_catalog_database_container(c): continue
+
+        path_to_packages_in_container = put_packages_in_container(c, tarfile_path)
+
+        # Install packages
+        for p in packages:
+            if execute_command(c, install_package(p)) != 0:
+                raise RuntimeError('failed to install packages [{}]'.format(c.name))
+
+        if is_catalog_service_provider_container(c):
+            # TODO: Using the database provided by the context isn't going to work here because it's a docker image tag
+            database_plugin = 'irods-plugin-database-{0}*.{1}'.format(ctx.database_type(), package_suffix)
+
+            if execute_command(c, install_package(glob.glob(os.path.join(custom_packages_path, database_plugin))[0])):
+                raise RuntimeError('failed to install database plugin [{}]'.format(c.name))
 
 def execute_on_project(ctx):
     ec = 0
@@ -119,9 +173,7 @@ def execute_on_project(ctx):
 
         # Serially execute the list of commands provided in the input
         for command in ctx.commands:
-            print('----\nexecuting command [{}]'.format(command))
-            ec = execute_command_with_output(c, command)
-            print('\nexecution complete\n----')
+            ec = execute_command(c, command, user='irods', workdir='/var/lib/irods')
 
     except Exception as e:
         print(e)
