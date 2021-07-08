@@ -111,10 +111,9 @@ def put_packages_in_container(container, tarfile_path):
     return path_to_packages_dir_in_container
 
 def install_package(p):
-    return 'dpkg -i {}'.format(
+    return 'dpkg -i {}'.format(p)
 
 def install_custom_packages(ctx, custom_packages_path):
-    import irods_python_ci_utilities.get_package_suffix
     import glob
     import tarfile
 
@@ -126,7 +125,10 @@ def install_custom_packages(ctx, custom_packages_path):
     tarfile_name = ctx.job_name + '_packages.tar'
     tarfile_path = os.path.join(custom_packages_path, tarfile_name)
 
-    package_suffix = irods_python_ci_utilities.get_package_suffix()
+    # TODO: figure this out
+    #import .irods_python_ci_utilities.get_package_suffix
+    #package_suffix = irods_python_ci_utilities.get_package_suffix()
+    package_suffix = '.deb'
 
     with tarfile.open(tarfile_path, 'w') as f:
         for p in packages:
