@@ -12,6 +12,7 @@ class execution_context:
         self.docker_client  = dc
         self.database       = args.database
         self.platform       = args.platform
+        self.custom_packages = args.custom_packages
 
         if args.job_name:
             self.job_name = args.job_name
@@ -92,6 +93,9 @@ def collect_logs(ctx, containers):
             print('failed to collect log [{}]'.format(log_archive_path))
             print(e)
 
+def install_custom_packages(docker_client, path_to_packages, containers):
+    for c in containers:
+
 def execute_on_project(ctx):
     ec = 0
     containers = list()
@@ -110,6 +114,8 @@ def execute_on_project(ctx):
         wait_for_setup_to_finish(ctx.docker_client, c, ctx.setup_timeout)
 
         # TODO: install desired version here
+        if ctx.custom_packages:
+            install_custom_packages(ctx.docker_client, ctx.custom_packages, containers)
 
         # Serially execute the list of commands provided in the input
         for command in ctx.commands:
@@ -153,6 +159,8 @@ if __name__ == "__main__":
                         help='The tag of the database container to use (e.g. postgres:10.12')
     parser.add_argument('--job_name', metavar='JOB_NAME', type=str,
                         help='Name of the test run')
+    parser.add_argument('--custom_packages', metavar='FULLPATH_TO_DIRECTORY_WITH_PACKAGES', type=str,
+                        help='Full path to local directory which contains packages to be installed on iRODS containers.')
 
     args = parser.parse_args()
 
