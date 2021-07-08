@@ -1,12 +1,13 @@
 import compose.cli.command
 import docker
+import os
 
 class execution_context:
     OUTPUT_ENCODING = 'utf-8'
 
     def __init__(self, project_name, args, dc):
         self.project_name   = project_name
-        self.container_name = args.container
+        self.run_on         = args.run_on
         self.commands       = list(args.commands)
         self.setup_timeout  = args.setup_timeout
         self.docker_client  = dc
@@ -20,11 +21,11 @@ class execution_context:
             import uuid
             self.job_name = str(uuid.uuid4())
 
-        if args.log_output_directory:
-            self.log_output_directory = args.log_output_directory
+        if args.output_directory:
+            self.output_directory = args.output_directory
         else:
             import tempfile
-            self.log_output_directory = tempfile.mkdtemp(prefix=self.project_name)
+            self.output_directory = tempfile.mkdtemp(prefix=self.project_name)
 
     def database_type(self):
         return self.database(':')[0]
@@ -36,6 +37,9 @@ def is_catalog_service_provider_container(container):
     return 'provider' in container.name
 
 def execute_command(container, command, user='', workdir=None, verbose=True):
+    if verbose:
+        print('executing on [{0}] [{1}]'.format(container.name, command))
+
     exec_out = container.exec_run(command, user=user, workdir=workdir, stream=verbose)
 
     try:
@@ -69,11 +73,9 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
     raise SetupTimeoutError('timed out while waiting for iRODS to finish setting up')
 
 def collect_logs(ctx, containers):
-    import os.path
-
     LOGFILES_PATH = '/var/lib/irods/log'
 
-    od = os.path.join(ctx.log_output_directory, ctx.project_name, ctx.platform, ctx.database, ctx.job_name)
+    od = os.path.join(ctx.output_directory, ctx.project_name, ctx.platform, ctx.database, ctx.job_name)
     if not os.path.exists(od):
         os.makedirs(od)
 
@@ -97,60 +99,98 @@ def collect_logs(ctx, containers):
 
 def put_packages_in_container(container, tarfile_path):
     # Copy packages tarball into container
-    path_to_tarfile_in_container = '/' + os.path.basename(tarfile_path)
-    path_to_packages_dir_in_container = path_to_tarfile_in_container[:-4]
+    path_to_packages_dir_in_container = '/' + os.path.basename(tarfile_path)[:len('.tar') * -1]
 
-    with tarfile.open(tarfile_path, 'r') as tf:
-        data = tf.read()
-        if not c.put_archive(path_to_tarfile_in_container, data):
-            raise RuntimeError('failed to put packages archive into container [{}]'.format(c.name))
+    execute_command(container, 'mkdir -p ' + path_to_packages_dir_in_container, verbose=False)
 
-        # untar into directory in /
-        tf.extractall(path=path_to_packages_dir_in_container)
+    with open(tarfile_path, 'rb') as tf:
+        print('putting tarfile [{0}] in container [{1}] at [{2}]'.format(
+            tarfile_path, container.name, path_to_packages_dir_in_container))
+
+        if not container.put_archive(path_to_packages_dir_in_container, tf):
+            raise RuntimeError('failed to put packages archive into container [{}]'.format(container.name))
 
     return path_to_packages_dir_in_container
 
-def install_package(p):
-    return 'dpkg -i {}'.format(p)
+def install_package(c, p):
+    # TODO: figure this out
+    cmd = 'dpkg -i {}'.format(p)
 
-def install_custom_packages(ctx, custom_packages_path):
-    import glob
+    if execute_command(c, cmd) != 0:
+        raise RuntimeError('failed to install package [{0}] on [{1}]'.format(p, c.name))
+
+def is_database_plugin(p):
+    return 'database' in p
+
+def create_tarfile(ctx, members):
     import tarfile
-
-    packages = list()
-    for p in ['irods-runtime', 'irods-icommands', 'irods-server']:
-        packages.append(glob.glob(os.path.join(custom_packages_path, p + '*.{}'.format(package_suffix)))[0])
 
     # Create a tarfile with the packages
     tarfile_name = ctx.job_name + '_packages.tar'
-    tarfile_path = os.path.join(custom_packages_path, tarfile_name)
+    tarfile_path = os.path.join(ctx.output_directory, tarfile_name)
 
+    print('creating tarfile [{}]'.format(tarfile_path))
+
+    with tarfile.open(tarfile_path, 'w') as f:
+        for m in members:
+            print('adding member [{0}] to tarfile'.format(m))
+            f.add(m)
+
+    return tarfile_path
+
+def get_package_list(ctx):
+    import glob
+
+    # TODO: figure this out
+    package_suffix = 'deb'
+
+    print('listing for [{}]:\n{}'.format(ctx.custom_packages, os.listdir(ctx.custom_packages)))
+
+    packages = list()
+
+    for p in ['irods-runtime', 'irods-icommands', 'irods-server']:
+        p_glob = os.path.join(ctx.custom_packages, p + '*.{}'.format(package_suffix))
+
+        print('looking for packages like [{}]'.format(p_glob))
+
+        packages.append(glob.glob(p_glob)[0])
+
+    # TODO: maybe care about which DB plugins we are installing
+    for p in glob.glob(os.path.join(ctx.custom_packages, 'irods-database-plugin-*.{}'.format(package_suffix))):
+        packages.append(p)
+
+    return packages
+
+def restart_irods(c):
+    if execute_command(c, '/var/lib/irods/irodsctl restart', user='irods') != 0:
+        raise RuntimeError('Failed to restart iRODS server [{}]'.format(c.name))
+
+def install_custom_packages(ctx, containers):
     # TODO: figure this out
     #import .irods_python_ci_utilities.get_package_suffix
     #package_suffix = irods_python_ci_utilities.get_package_suffix()
-    package_suffix = '.deb'
+    package_suffix = 'deb'
 
-    with tarfile.open(tarfile_path, 'w') as f:
-        for p in packages:
-            f.add(glob.glob(os.path.join(custom_packages_path, p + '*.{0}'.format(package_suffix)))[0])
+    packages = get_package_list(ctx)
 
-    for c in ctx.containers:
+    print('packages to install [{}]'.format(packages))
+
+    tarfile_path = create_tarfile(ctx, packages)
+
+    for c in containers:
         # Only the iRODS containers need to have packages installed
         if is_catalog_database_container(c): continue
 
-        path_to_packages_in_container = put_packages_in_container(c, tarfile_path)
+        container = ctx.docker_client.containers.get(c.name)
 
-        # Install packages
+        path_to_packages_in_container = put_packages_in_container(container, tarfile_path)
+
         for p in packages:
-            if execute_command(c, install_package(p)) != 0:
-                raise RuntimeError('failed to install packages [{}]'.format(c.name))
+            if is_database_plugin(p) and not is_catalog_service_provider_container(c): continue
 
-        if is_catalog_service_provider_container(c):
-            # TODO: Using the database provided by the context isn't going to work here because it's a docker image tag
-            database_plugin = 'irods-plugin-database-{0}*.{1}'.format(ctx.database_type(), package_suffix)
+            install_package(container, os.path.join(path_to_packages_in_container, os.path.basename(p)))
 
-            if execute_command(c, install_package(glob.glob(os.path.join(custom_packages_path, database_plugin))[0])):
-                raise RuntimeError('failed to install database plugin [{}]'.format(c.name))
+        restart_irods(container)
 
 def execute_on_project(ctx):
     ec = 0
@@ -164,23 +204,24 @@ def execute_on_project(ctx):
         containers = p.up()
 
         # Get the container on which the command is to be executed
-        c = ctx.docker_client.containers.get(ctx.container_name)
+        c = ctx.docker_client.containers.get(ctx.run_on)
 
         # Ensure that iRODS setup has completed
         wait_for_setup_to_finish(ctx.docker_client, c, ctx.setup_timeout)
 
         # TODO: install desired version here
         if ctx.custom_packages:
-            install_custom_packages(ctx.docker_client, ctx.custom_packages, containers)
+            install_custom_packages(ctx, containers)
 
         # Serially execute the list of commands provided in the input
         for command in ctx.commands:
+            # TODO: on --continue, save only failure ec's/commands
             ec = execute_command(c, command, user='irods', workdir='/var/lib/irods')
 
     except Exception as e:
         print(e)
 
-        p.down(include_volumes = True, remove_image_type = False)
+        #p.down(include_volumes = True, remove_image_type = False)
 
         raise
 
@@ -188,7 +229,7 @@ def execute_on_project(ctx):
         #print('we did it')
 
     finally:
-        print('collecting logs [{}]'.format(ctx.log_output_directory))
+        print('collecting logs [{}]'.format(ctx.output_directory))
         collect_logs(ctx, containers)
 
         p.down(include_volumes = True, remove_image_type = False)
@@ -205,8 +246,8 @@ if __name__ == "__main__":
                         help='The name of the container on which the command will run')
     parser.add_argument('--setup_timeout', metavar='SETUP_TIMEOUT_IN_SECONDS', type=int, default=30,
                         help='How many seconds to wait before timing out while waiting on iRODS server to be set up.')
-    parser.add_argument('--log_output_directory', metavar='FULLPATH_TO_DIRECTORY_FOR_OUTPUT_LOGS', type=str,
-                        help='Full path to local directory for output logs which will be copied from the containers.')
+    parser.add_argument('--output_directory', metavar='FULLPATH_TO_DIRECTORY_FOR_OUTPUT', type=str,
+                        help='Full path to local directory for output from execution.')
     parser.add_argument('--platform', metavar='PLATFORM', type=str, default='ubuntu:18.04',
                         help='The tag of the base Docker image to use (e.g. centos:7)')
     parser.add_argument('--database', metavar='DATABASE', type=str, default='postgres:10.12',
