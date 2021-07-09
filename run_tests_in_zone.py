@@ -216,7 +216,7 @@ def execute_on_project(ctx):
         # Ensure that iRODS setup has completed
         wait_for_setup_to_finish(ctx.docker_client, c, ctx.setup_timeout)
 
-        # TODO: install desired version here
+        # Install the custom packages on all the iRODS containers, if specified.
         if ctx.custom_packages:
             install_custom_packages(ctx, containers)
 
@@ -228,12 +228,7 @@ def execute_on_project(ctx):
     except Exception as e:
         print(e)
 
-        #p.down(include_volumes = True, remove_image_type = False)
-
         raise
-
-    #else:
-        #print('we did it')
 
     finally:
         print('collecting logs [{}]'.format(ctx.output_directory))
