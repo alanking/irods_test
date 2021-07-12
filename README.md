@@ -38,7 +38,40 @@ Custom packages can be installed manually but in the future this should be more 
 
 ## run\_irods\_test.py
 
-The steps above have been captured in a python script here.
+The steps above have been captured in a python script called `run_irods_test.py`.
+
+It is recommended to use a virtual environment when running this script. I'm using python 3.6.9:
+```
+$ pip freeze
+attrs==21.2.0
+bcrypt==3.2.0
+cached-property==1.5.2
+certifi==2021.5.30
+cffi==1.14.5
+chardet==4.0.0
+cryptography==3.4.7
+distro==1.5.0
+docker==5.0.0
+docker-compose==1.29.2
+dockerpty==0.4.1
+docopt==0.6.2
+idna==2.10
+importlib-metadata==4.6.0
+jsonschema==3.2.0
+paramiko==2.7.2
+pycparser==2.20
+PyNaCl==1.4.0
+pyrsistent==0.18.0
+python-dotenv==0.18.0
+PyYAML==5.4.1
+requests==2.25.1
+six==1.16.0
+texttable==1.6.3
+typing-extensions==3.10.0.0
+urllib3==1.26.6
+websocket-client==0.59.0
+zipp==3.4.1
+```
 
 Example usage:
 ```
