@@ -4,16 +4,18 @@ import os
 
 class execution_context:
     OUTPUT_ENCODING = 'utf-8'
+    PROJECT_NAME = 'irods_test_base'
 
-    def __init__(self, project_name, args, dc):
-        self.project_name   = project_name
+    def __init__(self, args, dc):
+        self.project_name   = 'irods_test_base'
         self.run_on         = args.run_on
         self.commands       = list(args.commands)
         self.setup_timeout  = args.setup_timeout
         self.docker_client  = dc
-        self.database       = args.database
-        self.platform       = args.platform
         self.custom_packages = args.custom_packages
+
+        self.platform_name, self.platform_version = args.platform.split(':')
+        self.database_name, self.database_version = args.database.split(':')
 
         if args.job_name:
             self.job_name = args.job_name
@@ -78,7 +80,7 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
 def collect_logs(ctx, containers):
     LOGFILES_PATH = '/var/lib/irods/log'
 
-    od = os.path.join(ctx.output_directory, ctx.project_name, ctx.platform, ctx.database, ctx.job_name)
+    od = os.path.join(ctx.output_directory, ctx.job_name, 'logs')
     if not os.path.exists(od):
         os.makedirs(od)
 
@@ -238,6 +240,14 @@ def execute_on_project(ctx):
 
     return ec
 
+def get_path_to_project(ctx):
+    return os.path.join(
+            os.path.abspath('projects'),
+            ctx.platform_name,
+            ctx.platform_version,
+            ctx.database_name,
+            ctx.project_name)
+
 if __name__ == "__main__":
     import argparse
 
@@ -261,7 +271,48 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # TODO: modify project name based on selected platform and DB
-    project_name = 'irods_test_base'
+    ctx = execution_context(args, docker.from_env())
 
-    exit(execute_on_project(execution_context(project_name, args, docker.from_env())))
+    path_to_project = get_path_to_project(ctx)
+
+    print(path_to_project)
+
+    #exit(execute_on_project(ctx))
+
+    ec = 0
+    containers = list()
+
+    try:
+        # Get the context for the Compose file
+        p = compose.cli.command.get_project(path_to_project)
+
+        # Bring up the services
+        containers = p.up()
+
+        # Get the container on which the command is to be executed
+        c = ctx.docker_client.containers.get(ctx.run_on)
+
+        # Ensure that iRODS setup has completed
+        wait_for_setup_to_finish(ctx.docker_client, c, ctx.setup_timeout)
+
+        # Install the custom packages on all the iRODS containers, if specified.
+        if ctx.custom_packages:
+            install_custom_packages(ctx, containers)
+
+        # Serially execute the list of commands provided in the input
+        for command in ctx.commands:
+            # TODO: on --continue, save only failure ec's/commands
+            ec = execute_command(c, command, user='irods', workdir='/var/lib/irods')
+
+    except Exception as e:
+        print(e)
+
+        raise
+
+    finally:
+        print('collecting logs [{}]'.format(ctx.output_directory))
+        collect_logs(ctx, containers)
+
+        p.down(include_volumes = True, remove_image_type = False)
+
+    exit(ec)
