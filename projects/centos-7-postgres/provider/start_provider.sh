@@ -1,9 +1,9 @@
 #! /bin/bash
 
-# Start the Postgres database.
 counter=0
-until pg_isready -h catalog.example.org -d ICAT -U irods -q
-do
+#until pg_isready -h catalog.example.org -d ICAT -U irods -q
+# Note: pg_isready is not provided by the postgresql client package on CentOS 7
+until nc -z catalog.example.org 5432; do
     sleep 1
     ((counter += 1))
 done

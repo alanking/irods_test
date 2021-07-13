@@ -10,7 +10,6 @@ RUN rpm --import https://packages.irods.org/irods-signing-key.asc && \
     yum update -y && \
     yum install -y irods-runtime irods-icommands irods-server irods-database-plugin-postgres
 
-# Set command to execute when launching the container.
 COPY start_provider.sh irods_provider.input /
 RUN chmod u+x /start_provider.sh
 ENTRYPOINT ["./start_provider.sh"]
