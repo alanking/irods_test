@@ -75,7 +75,7 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
         time.sleep(1)
         now = time.time()
 
-    raise SetupTimeoutError('timed out while waiting for iRODS to finish setting up')
+    raise RuntimeError('timed out while waiting for iRODS to finish setting up')
 
 def collect_logs(ctx, containers):
     LOGFILES_PATH = '/var/lib/irods/log'
@@ -241,12 +241,7 @@ def execute_on_project(ctx):
     return ec
 
 def get_path_to_project(ctx):
-    return os.path.join(
-            os.path.abspath('projects'),
-            ctx.platform_name,
-            ctx.platform_version,
-            ctx.database_name,
-            ctx.project_name)
+    return os.path.join(os.path.abspath('projects'), '-'.join([ctx.platform_name, ctx.platform_version, ctx.database_name]))
 
 if __name__ == "__main__":
     import argparse
@@ -254,7 +249,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run iRODS tests in a consistent environment.')
     parser.add_argument('commands', metavar='COMMANDS', nargs='+',
                         help='Space-delimited list of commands to be run')
-    parser.add_argument('--run_on', metavar='CONTAINER', type=str, default='irods_test_base_irods-catalog-provider_1',
+    parser.add_argument('--run_on', metavar='CONTAINER', type=str, default='ubuntu-1804-postgres_irods-catalog-provider_1',
                         help='The name of the container on which the command will run')
     parser.add_argument('--setup_timeout', metavar='SETUP_TIMEOUT_IN_SECONDS', type=int, default=30,
                         help='How many seconds to wait before timing out while waiting on iRODS server to be set up.')
