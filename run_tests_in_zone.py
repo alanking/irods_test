@@ -241,7 +241,7 @@ def execute_on_project(ctx):
     return ec
 
 def get_path_to_project(ctx):
-    return os.path.join(os.path.abspath('projects'), '-'.join([ctx.platform_name, ctx.platform_version, ctx.database_name]))
+    return os.path.join(os.path.abspath('projects'), '-'.join([ctx.platform_name, ctx.platform_version, ctx.database_name, ctx.database_version]))
 
 if __name__ == "__main__":
     import argparse
