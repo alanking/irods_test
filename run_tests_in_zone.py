@@ -7,7 +7,6 @@ class execution_context:
     PROJECT_NAME = 'irods_test_base'
 
     def __init__(self, args, dc):
-        self.project_name   = 'irods_test_base'
         self.run_on         = args.run_on
         self.commands       = list(args.commands)
         self.setup_timeout  = args.setup_timeout
@@ -16,6 +15,11 @@ class execution_context:
 
         self.platform_name, self.platform_version = args.platform.split(':')
         self.database_name, self.database_version = args.database.split(':')
+
+        self.project_name = '-'.join([self.platform_name,
+                                      self.platform_version,
+                                      self.database_name,
+                                      self.database_version])
 
         if args.job_name:
             self.job_name = args.job_name
@@ -240,16 +244,13 @@ def execute_on_project(ctx):
 
     return ec
 
-def get_path_to_project(ctx):
-    return os.path.join(os.path.abspath('projects'), '-'.join([ctx.platform_name, ctx.platform_version, ctx.database_name, ctx.database_version]))
-
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Run iRODS tests in a consistent environment.')
     parser.add_argument('commands', metavar='COMMANDS', nargs='+',
                         help='Space-delimited list of commands to be run')
-    parser.add_argument('--run_on', metavar='CONTAINER', type=str, default='ubuntu-1804-postgres_irods-catalog-provider_1',
+    parser.add_argument('--run_on', metavar='CONTAINER', type=str, default='irods-catalog-provider',
                         help='The name of the container on which the command will run')
     parser.add_argument('--setup_timeout', metavar='SETUP_TIMEOUT_IN_SECONDS', type=int, default=30,
                         help='How many seconds to wait before timing out while waiting on iRODS server to be set up.')
@@ -268,7 +269,7 @@ if __name__ == "__main__":
 
     ctx = execution_context(args, docker.from_env())
 
-    path_to_project = get_path_to_project(ctx)
+    path_to_project = os.path.join(os.path.abspath('projects'), ctx.project_name)
 
     print(path_to_project)
 
@@ -285,7 +286,7 @@ if __name__ == "__main__":
         containers = p.up()
 
         # Get the container on which the command is to be executed
-        c = ctx.docker_client.containers.get(ctx.run_on)
+        c = ctx.docker_client.containers.get('_'.join([p.name, args.run_on, '1']))
 
         # Ensure that iRODS setup has completed
         wait_for_setup_to_finish(ctx.docker_client, c, ctx.setup_timeout)
