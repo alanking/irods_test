@@ -11,7 +11,7 @@ RUN rpm --import https://packages.irods.org/irods-signing-key.asc && \
     yum install -y irods-runtime irods-icommands irods-server irods-database-plugin-mysql
 
 COPY odbcinst.ini /etc
-ADD mysql-connector-odbc-5.2.7-linux-glibc2.5-x86-64bit.tar.gz /
+ADD mysql-connector-odbc-5.2.7-linux-el6-x86-64bit.tar.gz /
 COPY start_provider.sh irods_provider.input /
 RUN chmod u+x /start_provider.sh
 ENTRYPOINT ["./start_provider.sh"]

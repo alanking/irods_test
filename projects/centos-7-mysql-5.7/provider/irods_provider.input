@@ -3,7 +3,7 @@
 
 
 catalog.example.org
-5432
+3306
 ICAT
 irods
 y
