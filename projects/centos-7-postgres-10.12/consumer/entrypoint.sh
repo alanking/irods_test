@@ -8,7 +8,7 @@ done
 # Set up iRODS if not already done
 if [ ! -e /var/lib/irods/setup_complete ]
     then
-        python /var/lib/irods/scripts/setup_irods.py < /irods_consumer.input
+        python /var/lib/irods/scripts/setup_irods.py < /setup.input
 fi
 
 # start server

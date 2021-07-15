@@ -9,6 +9,5 @@ RUN wget -qO - https://packages.irods.org/irods-signing-key.asc | apt-key add -;
     apt-get update && \
     apt-get install -y irods-runtime irods-icommands irods-server irods-database-plugin-postgres
 
-COPY start_provider.sh irods_provider.input /
-RUN chmod u+x /start_provider.sh
-ENTRYPOINT ["./start_provider.sh"]
+COPY entrypoint.sh setup.input /
+ENTRYPOINT ["bash", "/entrypoint.sh"]

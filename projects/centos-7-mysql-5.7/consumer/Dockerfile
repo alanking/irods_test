@@ -10,7 +10,5 @@ RUN rpm --import https://packages.irods.org/irods-signing-key.asc && \
     yum update -y && \
     yum install -y irods-runtime irods-icommands irods-server
 
-# Set command to execute when launching the container.
-COPY start_consumer.sh irods_consumer.input /
-RUN chmod u+x /start_consumer.sh
-ENTRYPOINT ["/start_consumer.sh"]
+COPY entrypoint.sh setup.input /
+ENTRYPOINT ["bash", "/entrypoint.sh"]

@@ -8,6 +8,5 @@ RUN wget -qO - https://packages.irods.org/irods-signing-key.asc | apt-key add -;
     apt-get update && \
     apt-get install -y irods-runtime irods-icommands irods-server
 
-COPY start_consumer.sh irods_consumer.input /
-RUN chmod u+x /start_consumer.sh
-ENTRYPOINT ["/start_consumer.sh"]
+COPY entrypoint.sh setup.input /
+ENTRYPOINT ["bash", "/entrypoint.sh"]

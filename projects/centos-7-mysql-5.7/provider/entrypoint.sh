@@ -21,7 +21,7 @@ ln -s /usr/lib64/libodbcinst.so.2.0.0 /usr/lib64/libodbcinst.so.1
 # Set up iRODS if not already done
 if [ ! -e /var/lib/irods/setup_complete ]
     then
-        python /var/lib/irods/scripts/setup_irods.py < /irods_provider.input
+        python /var/lib/irods/scripts/setup_irods.py < /setup.input
 fi
 
 # run the server

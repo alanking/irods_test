@@ -11,6 +11,6 @@ RUN wget -qO - https://packages.irods.org/irods-signing-key.asc | apt-key add -;
 
 COPY odbcinst.ini /etc
 ADD mysql-connector-odbc-5.2.7-linux-glibc2.5-x86-64bit.tar.gz /
-COPY start_provider.sh irods_provider.input /
-RUN chmod u+x /start_provider.sh
-ENTRYPOINT ["./start_provider.sh"]
+
+COPY entrypoint.sh setup.input /
+ENTRYPOINT ["bash", "/entrypoint.sh"]
