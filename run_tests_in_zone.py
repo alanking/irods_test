@@ -3,6 +3,17 @@ import docker
 import os
 
 class execution_context:
+    package_context = {
+        'centos' : {
+            'command' : 'rpm -U --force',
+            'extension' : 'rpm'
+         },
+        'ubuntu' : {
+            'command' : 'dpkg -i',
+            'extension' : 'deb'
+        }
+    }
+
     OUTPUT_ENCODING = 'utf-8'
     PROJECT_NAME = 'irods_test_base'
 
@@ -121,18 +132,18 @@ def put_packages_in_container(container, tarfile_path):
 
     return path_to_packages_dir_in_container
 
-def install_package(c, p):
-    # TODO: figure this out
-    cmd = 'dpkg -i {}'.format(p)
 
-    #ec = execute_command(c, cmd)
+def install_package(container, platform, full_path_to_package):
+    cmd = ' '.join([execution_context.package_context[platform.lower()]['command'], full_path_to_package])
+
+    #ec = execute_command(container, cmd)
 
     #if ec != 0:
-        #raise RuntimeError('failed to install package [{0}] on [{1}] [ec=[{2}]]'.format(p, c.name, ec))
+        #raise RuntimeError('failed to install package [{0}] on [{1}] [ec=[{2}]]'.format(p, container.name, ec))
 
     #return ec
 
-    execute_command(c, cmd)
+    execute_command(container, cmd)
 
 def create_tarfile(ctx, members):
     import tarfile
@@ -153,8 +164,7 @@ def create_tarfile(ctx, members):
 def get_package_list(ctx):
     import glob
 
-    # TODO: figure this out
-    package_suffix = 'deb'
+    package_suffix = execution_context.package_context[ctx.platform_name.lower()]['extension']
 
     print('listing for [{}]:\n{}'.format(ctx.custom_packages, os.listdir(ctx.custom_packages)))
 
@@ -182,7 +192,7 @@ def install_custom_packages(ctx, containers):
     # TODO: figure this out
     #import .irods_python_ci_utilities.get_package_suffix
     #package_suffix = irods_python_ci_utilities.get_package_suffix()
-    package_suffix = 'deb'
+    package_suffix = execution_context.package_context[ctx.platform_name.lower()]['extension']
 
     packages = get_package_list(ctx)
 
@@ -201,7 +211,7 @@ def install_custom_packages(ctx, containers):
         for p in packages:
             if is_database_plugin(p) and not is_catalog_service_provider_container(c): continue
 
-            install_package(container, p)
+            install_package(container, ctx.platform_name, p)
 
         restart_irods(container)
 

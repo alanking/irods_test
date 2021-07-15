@@ -2,7 +2,7 @@ FROM centos:7
 
 RUN yum update -y && \
     yum install -y epel-release && \
-    yum install -y sudo wget python-pip rsyslog netcat gnupg python python-psutil python-requests python-jsonschema unixODBC-devel && \
+    yum install -y sudo wget python-pip rsyslog netcat gnupg python python-psutil python-requests python-jsonschema unixODBC-devel postgresql authd postgresql-odbc && \
     pip install xmlrunner
 
 RUN rpm --import https://packages.irods.org/irods-signing-key.asc && \
