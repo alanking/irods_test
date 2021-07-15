@@ -3,7 +3,7 @@ version: '3'
 services:
   icat:
     build:
-      context: icat
+      context: ../../catalogs/postgres-10.12
       args:
         postgres_password: testpassword
     hostname: catalog.example.org

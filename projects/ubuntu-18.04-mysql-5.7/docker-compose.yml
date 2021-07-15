@@ -25,7 +25,7 @@ services:
     expose:
       - "3306"
     volumes:
-      - "./icat/db_commands.sql:/docker-entrypoint-initdb.d/db_commands.sql:ro"
+      - "../../catalogs/mysql-5.7/db_commands.sql:/docker-entrypoint-initdb.d/db_commands.sql:ro"
 
   irods-catalog-provider:
     build:
