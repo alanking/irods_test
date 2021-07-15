@@ -1,6 +1,3 @@
-#
-# iRODS Consumer Image.
-#
 FROM ubuntu:18.04
 
 RUN apt-get update && \
@@ -11,12 +8,6 @@ RUN wget -qO - https://packages.irods.org/irods-signing-key.asc | apt-key add -;
     apt-get update && \
     apt-get install -y irods-runtime irods-icommands irods-server
 
-EXPOSE 1248 1247
-
-# Set command to execute when launching the container.
 COPY start_consumer.sh irods_consumer.input /
 RUN chmod u+x /start_consumer.sh
 ENTRYPOINT ["/start_consumer.sh"]
-#RUN curl -fSL https://github.com/jwilder/dockerize/releases/download/v0.6.1/dockerize-linux-amd64-v0.6.1.tar.gz -o dockerize-linux-amd64-v0.6.1.tar.gz \
-    #&& tar -C /usr/local/bin -xzvf dockerize-linux-amd64-v0.6.1.tar.gz
-#CMD dockerize -wait tcp://icat.example.org:1247 -timeout 250s /start_consumer.sh
