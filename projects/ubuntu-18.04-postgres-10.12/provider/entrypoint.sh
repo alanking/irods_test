@@ -13,6 +13,12 @@ echo Postgres took approximately $counter seconds to fully start ...
 if [ ! -e /var/lib/irods/setup_complete ]
     then
         python /var/lib/irods/scripts/setup_irods.py < /setup.input
+
+        # Make sure univMSS interface is configured for testing
+        su - irods -c "cp /var/lib/irods/msiExecCmd_bin/univMssInterface.sh.template /var/lib/irods/msiExecCmd_bin/univMssInterface.sh"
+        su - irods -c "sed -i "s/template-//g" /var/lib/irods/msiExecCmd_bin/univMssInterface.sh"
+        su - irods -c "chmod u+x /var/lib/irods/msiExecCmd_bin/univMssInterface.sh"
+        su - irods -c "./msiExecCmd_bin/univMssInterface.sh"
 fi
 
 # run the server

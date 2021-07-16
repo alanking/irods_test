@@ -135,13 +135,6 @@ def put_packages_in_container(container, tarfile_path):
 def install_package(container, platform, full_path_to_package):
     cmd = ' '.join([execution_context.package_context[platform.lower()]['command'], full_path_to_package])
 
-    #ec = execute_command(container, cmd)
-
-    #if ec != 0:
-        #raise RuntimeError('failed to install package [{0}] on [{1}] [ec=[{2}]]'.format(p, container.name, ec))
-
-    #return ec
-
     execute_command(container, cmd)
 
 def create_tarfile(ctx, members):
@@ -182,15 +175,10 @@ def get_package_list(ctx):
 
     return packages
 
-def restart_irods(c):
-    #if execute_command(c, '/var/lib/irods/irodsctl restart', user='irods') != 0:
-        #raise RuntimeError('Failed to restart iRODS server [{}]'.format(c.name))
-    execute_command(c, '/var/lib/irods/irodsctl restart', user='irods')
+def restart_irods(container):
+    execute_command(container, '/var/lib/irods/irodsctl restart', user='irods')
 
 def install_custom_packages(ctx, containers):
-    # TODO: figure this out
-    #import .irods_python_ci_utilities.get_package_suffix
-    #package_suffix = irods_python_ci_utilities.get_package_suffix()
     package_suffix = execution_context.package_context[ctx.platform_name.lower()]['extension']
 
     packages = get_package_list(ctx)
@@ -288,8 +276,10 @@ if __name__ == "__main__":
     containers = list()
 
     try:
+        # TODO: project_name parameter causes image explosion - can this be avoided?
+        #p = compose.cli.command.get_project(path_to_project, project_name=ctx.job_name)
         # Get the context for the Compose file
-        p = compose.cli.command.get_project(path_to_project, project_name=ctx.job_name)
+        p = compose.cli.command.get_project(path_to_project)
 
         # Bring up the services
         containers = p.up()
