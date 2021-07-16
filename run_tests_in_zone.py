@@ -33,10 +33,10 @@ class execution_context:
                                       self.database_version])
 
         if args.job_name:
-            self.job_name = args.job_name
+            self.job_name = '_'.join([args.job_name, self.project_name])
         else:
             import uuid
-            self.job_name = str(uuid.uuid4())
+            self.job_name = '_'.join([str(uuid.uuid4()), self.project_name])
 
         if args.output_directory:
             self.output_directory = args.output_directory
@@ -108,8 +108,7 @@ def collect_logs(ctx, containers):
 
         try:
             # TODO: get server version to determine path of the log files
-            bits, stat = ctx.docker_client.containers.get(c.name).get_archive(LOGFILES_PATH)
-            print('stat [{0}] [{1}]'.format(LOGFILES_PATH, stat))
+            bits, _ = ctx.docker_client.containers.get(c.name).get_archive(LOGFILES_PATH)
 
             with open(log_archive_path, 'wb') as f:
                 for chunk in bits:
@@ -290,7 +289,7 @@ if __name__ == "__main__":
 
     try:
         # Get the context for the Compose file
-        p = compose.cli.command.get_project(path_to_project)
+        p = compose.cli.command.get_project(path_to_project, project_name=ctx.job_name)
 
         # Bring up the services
         containers = p.up()
