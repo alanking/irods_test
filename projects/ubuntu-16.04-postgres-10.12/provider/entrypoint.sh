@@ -2,8 +2,7 @@
 
 # Start the Postgres database.
 counter=0
-until pg_isready -h catalog.example.org -d ICAT -U irods -q
-do
+until pg_isready -h catalog.example.org -d ICAT -U irods -q; do
     sleep 1
     ((counter += 1))
 done
