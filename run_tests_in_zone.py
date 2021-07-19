@@ -175,8 +175,8 @@ def get_package_list(ctx):
 
     return packages
 
-def restart_irods(container):
-    execute_command(container, '/var/lib/irods/irodsctl restart', user='irods')
+def irodsctl(container, cmd):
+    execute_command(container, '/var/lib/irods/irodsctl ' + cmd, user='irods')
 
 def install_custom_packages(ctx, containers):
     package_suffix = execution_context.package_context[ctx.platform_name.lower()]['extension']
@@ -193,14 +193,17 @@ def install_custom_packages(ctx, containers):
 
         container = ctx.docker_client.containers.get(c.name)
 
+        irodsctl(container, 'stop')
+
         path_to_packages_in_container = put_packages_in_container(container, tarfile_path)
 
-        for p in packages:
-            if is_database_plugin(p) and not is_catalog_service_provider_container(c): continue
+        package_list = ' '.join([p for p in packages if not is_database_plugin(p) or is_catalog_service_provider_container(container)])
 
-            install_package(container, ctx.platform_name, p)
+        cmd = ' '.join([execution_context.package_context[ctx.platform_name.lower()]['command'], package_list])
 
-        restart_irods(container)
+        execute_command(container, cmd)
+
+        irodsctl(container, 'restart')
 
 def execute_on_project(ctx):
     ec = 0
