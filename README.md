@@ -12,25 +12,33 @@ In this repository, the most basic set up is as follows:
 
 Any docker-compose project can be substituted/added for support so long as it meets the requirements for running iRODS tests (i.e. additional OS/DB support).
 
+## Running tests on a project
+
+Each docker-compose project is actually just running iRODS servers in containers which are held in existence by an infinite loop. Anything can be run on any container in the topology.
+
 To run the tests, the following steps must be performed:
 
 1. Stand up the topology
 ```
-$ docker-compose up
+docker-compose up
+```
+The above assumes the working directory holds the docker-compose.yml file for the particular OS/DB configuration you want. If you want to run from a different project, try this:
+```
+docker-compose --project-directory <full or relative path to directory with docker-compose.yml> up
 ```
 
 2. Run the tests while pointed at the container using run\_tests.py
 ```
 # runs the entire test suite on the CSP as if it were not in a topology (i.e. "core tests")
-$ docker exec --user irods --workdir /var/lib/irods irods_test_base_irods-catalog-provider1_1 python ./scripts/run_tests.py --run_python_suite
+docker exec --user irods --workdir /var/lib/irods irods_test_base_irods-catalog-provider1_1 python ./scripts/run_tests.py --run_python_suite
 
 # runs specific test module on the CSC (i.e. "topology from resource")
-$ docker exec --user irods --workdir /var/lib/irods irods_test_base_irods-catalog-consumer-resource1_1 python ./scripts/run_tests.py --topology=resource --run_s test_ils
+docker exec --user irods --workdir /var/lib/irods irods_test_base_irods-catalog-consumer-resource1_1 python ./scripts/run_tests.py --topology=resource --run_s test_ils
 ```
 
 3. Tear down the topology (removes containers!)
 ```
-$ docker-compose down
+docker-compose down
 ```
 
 The latest version of iRODS available in the repository for the given platform is installed by default.
@@ -76,8 +84,9 @@ zipp==3.4.1
 Example usage:
 ```
 # runs specific test module on the CSC (i.e. "topology from resource")
-python run_tests_in_zone.py --setup_timeout 30 --container irods_test_base_irods-catalog-consumer-resource1_1 'python ./scripts/run_tests.py --topology=resource --run_s test_ils.Test_Ils.test_option_d_with_collections__issue_5506'
+python run_tests_in_zone.py --run_on irods-catalog-consumer-resource1 'python ./scripts/run_tests.py --topology=resource --run_s test_ils.Test_Ils.test_option_d_with_collections__issue_5506'
 ```
+`--run_on` should be the "generic name" for the container on which the command given should be executed. The specific project information and container instance information will be programmatically added in the script.
 
 ## Future Work
  - Copy out log files to a specified volume mount
