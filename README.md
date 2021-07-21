@@ -75,16 +75,3 @@ python run_tests_in_zone.py --run_on irods-catalog-consumer-resource1 'python ./
 ```
 `--run_on` should be the "base" name for the container on which the command given should be executed. The specific project information and container instance information will be programmatically added in the script.
 
-## Future Work
- - Additional OS/DB support
-    - oracle on all platforms
- - Versions of each docker-compose project which does not come with iRODS installed by default
- - Specifying an iRODS version to install and a repository
- - Create a series of compose files or more generic way to run plugin and client tests
- - Add support for SSL
- - Add support for custom externals packages
- - Add federated zone (which is also a topology) and supports current test suite zone names and expectations
- - Allow tests to continue running after failure and only report failures (idempotency)
- - Allow tests to be retried (--retries)
-    - Note: This may discourage writing resilient tests, but some of the existing tests are simply not resilient and so must be accommodated until they are resolved
- - Create a hook so that this can be used with a automation framework (e.g. Jenkins, Github Actions, etc.)
