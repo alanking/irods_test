@@ -75,3 +75,6 @@ python run_tests_in_zone.py --run_on irods-catalog-consumer-resource1 'python ./
 ```
 `--run_on` should be the "base" name for the container on which the command given should be executed. The specific project information and container instance information will be programmatically added in the script.
 
+## Thanks
+
+Thanks to @korydraughn for the [reference implementations](https://github.com/korydraughn/irods_docker/tree/master/compose/just_stand_it_up)
