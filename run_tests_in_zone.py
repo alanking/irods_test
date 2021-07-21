@@ -162,16 +162,12 @@ def get_package_list(ctx):
 
     packages = list()
 
-    for p in ['irods-runtime', 'irods-icommands', 'irods-server']:
+    for p in ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(ctx.database_name)]:
         p_glob = os.path.join(ctx.custom_packages, p + '*.{}'.format(package_suffix))
 
         print('looking for packages like [{}]'.format(p_glob))
 
         packages.append(glob.glob(p_glob)[0])
-
-    # TODO: maybe care about which DB plugins we are installing
-    for p in glob.glob(os.path.join(ctx.custom_packages, 'irods-database-plugin-*.{}'.format(package_suffix))):
-        packages.append(p)
 
     return packages
 
