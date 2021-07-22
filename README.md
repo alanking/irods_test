@@ -78,3 +78,5 @@ python run_tests_in_zone.py --run-on-container irods-catalog-consumer-resource1 
 ## Thanks
 
 Thanks to @korydraughn for the [reference implementations](https://github.com/korydraughn/irods_docker/tree/master/compose/just_stand_it_up)
+
+Thanks to @trel for the [package generation model](https://github.com/trel/build_and_sync_apt_and_yum_repositories)
