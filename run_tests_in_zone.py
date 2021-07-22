@@ -204,7 +204,7 @@ def install_custom_packages(ctx, containers):
 
     packages = get_package_list(ctx)
 
-    ctx.info('packages to install [{}]'.format(packages))
+    logging.info('packages to install [{}]'.format(packages))
 
     tarfile_path = create_tarfile(ctx, packages)
 
