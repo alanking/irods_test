@@ -3,6 +3,9 @@ import docker
 import os
 import logging
 
+# TODO: Way to know the absolute path of the thing that is actually running (this script)
+#script_path = os.path.dirname(os.path.realpath(__file__))
+
 def init_logger(verbosity=1, log_filename=None):
     # CRITICAL messages will always be printed, but anything after that is a function of the number of -v
     level = logging.CRITICAL - 10 * verbosity
@@ -49,13 +52,14 @@ class execution_context:
             self.job_name = '_'.join([args.job_name, self.project_name])
         else:
             import uuid
+            # TODO: use timestamps, also
             self.job_name = '_'.join([str(uuid.uuid4()), self.project_name])
 
         if args.output_directory:
-            self.output_directory = args.output_directory
+            self.output_directory = os.path.join(os.path.abspath(args.output_directory), self.job_name)
         else:
             import tempfile
-            self.output_directory = tempfile.mkdtemp(prefix=self.project_name)
+            self.output_directory = os.path.join(tempfile.mkdtemp(prefix=self.project_name), self.job_name)
 
 def is_catalog_database_container(container):
     return 'icat' in container.name
@@ -111,7 +115,7 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
 def collect_logs(ctx, containers):
     LOGFILES_PATH = '/var/lib/irods/log'
 
-    od = os.path.join(ctx.output_directory, ctx.job_name, 'logs')
+    od = os.path.join(ctx.output_directory, 'logs')
     if not os.path.exists(od):
         os.makedirs(od)
 
@@ -261,6 +265,14 @@ def execute_on_project(ctx):
 
     return ec
 
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc: # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else: raise
+
 if __name__ == "__main__":
     import argparse
 
@@ -287,6 +299,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ctx = execution_context(args, docker.from_env())
+
+    mkdir_p(ctx.output_directory)
 
     init_logger(args.verbosity, os.path.join(ctx.output_directory, 'script_output.log'))
 
