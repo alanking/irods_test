@@ -27,13 +27,13 @@ The above assumes the working directory holds the docker-compose.yml file for th
 docker-compose --project-directory <full or relative path to directory with docker-compose.yml> up
 ```
 
-2. Run the tests while pointed at the container using run\_tests.py
+2. Run the tests while pointed at the container using run\_tests.py. Examples:
 ```
-# runs the entire test suite on the CSP as if it were not in a topology (i.e. "core tests")
-docker exec --user irods --workdir /var/lib/irods irods_test_base_irods-catalog-provider1_1 python ./scripts/run_tests.py --run_python_suite
+# runs the entire test suite with ubuntu:18.04 and postgres:10.12 on the CSP as if it were not in a topology (i.e. "core tests")
+docker exec --user irods --workdir /var/lib/irods ubuntu-18.04-postgres-10.12_irods-catalog-provider1_1 python ./scripts/run_tests.py --run_python_suite
 
-# runs specific test module on the CSC (i.e. "topology from resource")
-docker exec --user irods --workdir /var/lib/irods irods_test_base_irods-catalog-consumer-resource1_1 python ./scripts/run_tests.py --topology=resource --run_s test_ils
+# runs specific test module with centos:7 and mysql:5.7 on the CSC (i.e. "topology from resource")
+docker exec --user irods --workdir /var/lib/irods centos-7-mysql-5.7_irods-catalog-consumer-resource1_1 python ./scripts/run_tests.py --topology=resource --run_s test_ils
 ```
 
 3. Tear down the topology (removes containers!)
@@ -64,16 +64,16 @@ This script allows you to specify a platform docker image tag (OS), a database d
  - Added to a .tar file on the host machine
  - Copied and unpacked into each container at an identical path as the host machine (i.e. `docker cp`) 
  - Installed on each container using the appropriate package manager for the selected platform
-4. The list of commands are run in sequence on the specified container (i.e. `docker exec <--run_on container>`)
-5. The contents of `/var/lib/irods/log` are copied out of each container into a .tar file in the `--output_directory`
+4. The list of commands are run in sequence on the specified container (i.e. `docker exec <--run-on-container>`)
+5. The contents of `/var/lib/irods/log` are copied out of each container into a .tar file in the `--output-directory`
 6. The docker-compose project is brought down (i.e. `docker-compose down` - removes containers)
 
 Example usage:
 ```
 # runs specific test module on the CSC (i.e. "topology from resource")
-python run_tests_in_zone.py --run_on irods-catalog-consumer-resource1 'python ./scripts/run_tests.py --topology=resource --run_s test_ils.Test_Ils.test_option_d_with_collections__issue_5506'
+python run_tests_in_zone.py --run-on-container irods-catalog-consumer-resource1 'python ./scripts/run_tests.py --topology=resource --run_s test_ils.Test_Ils.test_option_d_with_collections__issue_5506'
 ```
-`--run_on` should be the "base" name for the container on which the command given should be executed. The specific project information and container instance information will be programmatically added in the script.
+`--run-on-container` should be the "base" name for the container on which the command given should be executed. The specific project information and container instance information will be programmatically added in the script.
 
 ## Thanks
 
