@@ -94,10 +94,8 @@ def wait_for_setup_to_finish(c, timeout_in_seconds):
 
     raise RuntimeError('timed out while waiting for iRODS to finish setting up')
 
-def collect_logs(ctx, containers):
-    LOGFILES_PATH = '/var/lib/irods/log'
-
-    od = os.path.join(ctx.output_directory, 'logs')
+def collect_logs(docker_client, containers, output_directory, logfile_path='/var/lib/irods/log'):
+    od = os.path.join(output_directory, 'logs')
     if not os.path.exists(od):
         os.makedirs(od)
 
@@ -110,7 +108,7 @@ def collect_logs(ctx, containers):
 
         try:
             # TODO: get server version to determine path of the log files
-            bits, _ = ctx.docker_client.containers.get(c.name).get_archive(LOGFILES_PATH)
+            bits, _ = docker_client.containers.get(c.name).get_archive(logfile_path)
 
             with open(log_archive_path, 'wb') as f:
                 for chunk in bits:
@@ -286,7 +284,7 @@ if __name__ == "__main__":
 
     finally:
         logging.info('collecting logs [{}]'.format(ctx.output_directory))
-        collect_logs(ctx, containers)
+        collect_logs(ctx.docker_client, containers, ctx.output_directory)
 
         p.down(include_volumes = True, remove_image_type = False)
 
