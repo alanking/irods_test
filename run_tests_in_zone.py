@@ -3,19 +3,24 @@ import docker
 import os
 import logging
 
+import execute
+
 # TODO: Way to know the absolute path of the thing that is actually running (this script)
 #script_path = os.path.dirname(os.path.realpath(__file__))
 
 def init_logger(verbosity=1, log_filename=None):
     # CRITICAL messages will always be printed, but anything after that is a function of the number of -v
     level = logging.CRITICAL - 10 * verbosity
+
+    handlers = [logging.StreamHandler()]
+
+    if log_filename:
+        handlers.append(logging.FileHandler(os.path.abspath(log_filename)))
+
     logging.basicConfig(
         level = level if level > logging.NOTSET else logging.DEBUG,
         format = '%(asctime)-15s %(levelname)s - %(message)s',
-        handlers = [
-            logging.StreamHandler(),
-            logging.FileHandler(os.path.abspath(log_filename))
-        ]
+        handlers = handlers
     )
 
 class execution_context:
@@ -30,7 +35,6 @@ class execution_context:
         }
     }
 
-    OUTPUT_ENCODING = 'utf-8'
     PROJECT_NAME = 'irods_test_base'
 
     def __init__(self, args, dc):
@@ -70,29 +74,7 @@ def is_catalog_service_provider_container(container):
 def is_database_plugin(p):
     return 'database' in p
 
-def execute_command(container, command, user='', workdir=None, stream_output=False):
-    logging.info('executing on [{0}] [{1}]'.format(container.name, command))
-
-    exec_out = container.exec_run(command, user=user, workdir=workdir, stream=stream_output)
-
-    previous_log_level = logging.getLogger().getEffectiveLevel()
-
-    try:
-        logging.getLogger().setLevel(logging.INFO)
-
-        # Stream output from the executing command
-        while stream_output:
-            logging.info(next(exec_out.output).decode(execution_context.OUTPUT_ENCODING))
-
-    except StopIteration:
-        logging.info('done')
-
-    finally:
-        logging.getLogger().setLevel(previous_log_level)
-
-    return exec_out.exit_code
-
-def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
+def wait_for_setup_to_finish(c, timeout_in_seconds):
     import time
 
     FLAG_FILE = '/var/lib/irods/setup_complete'
@@ -103,7 +85,7 @@ def wait_for_setup_to_finish(dc, c, timeout_in_seconds):
     now = start_time
 
     while now - start_time < timeout_in_seconds:
-        if execute_command(c, 'stat {}'.format(FLAG_FILE)) == 0:
+        if execute.execute_command(c, 'stat {}'.format(FLAG_FILE)) == 0:
             logging.warning('iRODS has been set up (waited [{}] seconds)'.format(str(now - start_time)))
             return
 
@@ -155,7 +137,7 @@ def put_packages_in_container(container, tarfile_path):
 def install_package(container, platform, full_path_to_package):
     cmd = ' '.join([execution_context.package_context[platform.lower()]['command'], full_path_to_package])
 
-    execute_command(container, cmd)
+    execute.execute_command(container, cmd)
 
 def create_tarfile(ctx, members):
     import tarfile
@@ -197,7 +179,7 @@ def get_package_list(ctx):
     return packages
 
 def irodsctl(container, cmd):
-    execute_command(container, '/var/lib/irods/irodsctl ' + cmd, user='irods')
+    execute.execute_command(container, '/var/lib/irods/irodsctl ' + cmd, user='irods')
 
 def install_custom_packages(ctx, containers):
     package_suffix = execution_context.package_context[ctx.platform_name.lower()]['extension']
@@ -222,56 +204,16 @@ def install_custom_packages(ctx, containers):
 
         cmd = ' '.join([execution_context.package_context[ctx.platform_name.lower()]['command'], package_list])
 
-        execute_command(container, cmd)
+        execute.execute_command(container, cmd)
 
         irodsctl(container, 'restart')
-
-def execute_on_project(ctx):
-    ec = 0
-    containers = list()
-
-    try:
-        # Get the context for the Compose file
-        p = compose.cli.command.get_project(ctx.project_name)
-
-        # Bring up the services
-        containers = p.up()
-
-        # Get the container on which the command is to be executed
-        c = ctx.docker_client.containers.get(ctx.run_on)
-
-        # Ensure that iRODS setup has completed
-        wait_for_setup_to_finish(ctx.docker_client, c, ctx.setup_timeout)
-
-        # Install the custom packages on all the iRODS containers, if specified.
-        if ctx.custom_packages:
-            install_custom_packages(ctx, containers)
-
-        # Serially execute the list of commands provided in the input
-        for command in ctx.commands:
-            # TODO: on --continue, save only failure ec's/commands
-            ec = execute_command(c, command, user='irods', workdir='/var/lib/irods', stream_output=True)
-
-    except Exception as e:
-        logging.critical(e)
-
-        raise
-
-    finally:
-        logging.warning('collecting logs [{}]'.format(ctx.output_directory))
-        collect_logs(ctx, containers)
-
-        p.down(include_volumes = True, remove_image_type = False)
-
-    return ec
 
 def mkdir_p(path):
     try:
         os.makedirs(path)
-    except OSError as exc: # Python >2.5
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else: raise
+    except OSError as e:
+        if e.errno != errno.EEXIST or not os.path.isdir(path):
+            raise
 
 if __name__ == "__main__":
     import argparse
@@ -308,8 +250,6 @@ if __name__ == "__main__":
 
     logging.debug('found project [{}]'.format(path_to_project))
 
-    #exit(execute_on_project(ctx))
-
     ec = 0
     containers = list()
 
@@ -328,7 +268,7 @@ if __name__ == "__main__":
         logging.debug('got container to run on [{}]'.format(c.name))
 
         # Ensure that iRODS setup has completed
-        wait_for_setup_to_finish(ctx.docker_client, c, ctx.setup_timeout)
+        wait_for_setup_to_finish(c, ctx.setup_timeout)
 
         # Install the custom packages on all the iRODS containers, if specified.
         if ctx.custom_packages:
@@ -337,7 +277,7 @@ if __name__ == "__main__":
         # Serially execute the list of commands provided in the input
         for command in ctx.commands:
             # TODO: on --continue, save only failure ec's/commands
-            ec = execute_command(c, command, user='irods', workdir='/var/lib/irods', stream_output=True)
+            ec = execute.execute_command(c, command, user='irods', workdir='/var/lib/irods', stream_output=True)
 
     except Exception as e:
         logging.critical(e)
