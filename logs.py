@@ -1,7 +1,10 @@
-import container
+# grown-up modules
 import docker
 import logging
 import os
+
+# local modules
+import context
 
 # TODO: Maybe this should be some kind of builder
 def configure(verbosity=1, log_filename=None):
@@ -25,7 +28,7 @@ def collect_logs(docker_client, containers, output_directory, logfile_path='/var
         os.makedirs(od)
 
     for c in containers:
-        if container.is_catalog_database_container(c): continue
+        if context.is_catalog_database_container(c): continue
 
         log_archive_path = os.path.join(od, c.name)
 

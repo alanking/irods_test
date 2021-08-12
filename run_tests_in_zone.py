@@ -5,7 +5,7 @@ import os
 import logging
 
 # local modules
-import container
+import context
 import logs
 import execute
 
@@ -149,7 +149,7 @@ def install_custom_packages(ctx, containers):
 
     for c in containers:
         # Only the iRODS containers need to have packages installed
-        if container.is_catalog_database_container(c): continue
+        if context.is_catalog_database_container(c): continue
 
         container = ctx.docker_client.containers.get(c.name)
 
@@ -157,7 +157,7 @@ def install_custom_packages(ctx, containers):
 
         path_to_packages_in_container = put_packages_in_container(container, tarfile_path)
 
-        package_list = ' '.join([p for p in packages if not is_package_database_plugin(p) or container.is_catalog_service_provider_container(container)])
+        package_list = ' '.join([p for p in packages if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
 
         cmd = ' '.join([execution_context.package_context[ctx.platform_name.lower()]['command'], package_list])
 
