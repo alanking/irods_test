@@ -28,6 +28,7 @@ def execute_command(container, command, user='', workdir=None, stream_output=Fal
 
 if __name__ == "__main__":
     import argparse
+    import logs
 
     parser = argparse.ArgumentParser(description='Run commands on a running container.')
     parser.add_argument('commands', metavar='COMMANDS', nargs='+',
@@ -39,12 +40,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    level = logging.CRITICAL - 10 * verbosity
-
-    logging.basicConfig(
-        level = level if level > logging.NOTSET else logging.DEBUG,
-        format = '%(asctime)-15s %(levelname)s - %(message)s'
-    )
+    logs.configure(args.verbosity)
 
     ec = 0
     containers = list()

@@ -6,7 +6,7 @@ import logging
 
 # local modules
 import context
-import logs
+import install
 import execute
 
 # TODO: Way to know the absolute path of the thing that is actually running (this script)
@@ -77,94 +77,6 @@ def wait_for_setup_to_finish(c, timeout_in_seconds):
 
     raise RuntimeError('timed out while waiting for iRODS to finish setting up')
 
-def put_packages_in_container(container, tarfile_path):
-    # Copy packages tarball into container
-    path_to_packages_dir_in_container = '/' + os.path.basename(tarfile_path)[:len('.tar') * -1]
-
-    logging.debug('putting tarfile [{0}] in container [{1}] at [{2}]'.format(
-        tarfile_path, container.name, path_to_packages_dir_in_container))
-
-    with open(tarfile_path, 'rb') as tf:
-        if not container.put_archive('/', tf):
-            raise RuntimeError('failed to put packages archive into container [{}]'.format(container.name))
-
-    return path_to_packages_dir_in_container
-
-
-def install_package(container, platform, full_path_to_package):
-    cmd = ' '.join([execution_context.package_context[platform.lower()]['command'], full_path_to_package])
-
-    execute.execute_command(container, cmd)
-
-def create_tarfile(ctx, members):
-    import tarfile
-
-    # Create a tarfile with the packages
-    tarfile_name = ctx.job_name + '_packages.tar'
-    tarfile_path = os.path.join(ctx.output_directory, tarfile_name)
-
-    logging.debug('creating tarfile [{}]'.format(tarfile_path))
-
-    with tarfile.open(tarfile_path, 'w') as f:
-        for m in members:
-            logging.debug('adding member [{0}] to tarfile'.format(m))
-            f.add(m)
-
-    return tarfile_path
-
-def get_package_list(ctx):
-    import glob
-
-    if not ctx.custom_packages:
-        raise RuntimeError('Attempting to install custom packages from unspecified location')
-
-    package_suffix = execution_context.package_context[ctx.platform_name.lower()]['extension']
-
-    package_path = os.path.abspath(ctx.custom_packages)
-
-    logging.debug('listing for [{}]:\n{}'.format(package_path, os.listdir(package_path)))
-
-    packages = list()
-
-    for p in ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(ctx.database_name)]:
-        p_glob = os.path.join(package_path, p + '*.{}'.format(package_suffix))
-
-        logging.debug('looking for packages like [{}]'.format(p_glob))
-
-        packages.append(glob.glob(p_glob)[0])
-
-    return packages
-
-def irodsctl(container, cmd):
-    execute.execute_command(container, '/var/lib/irods/irodsctl ' + cmd, user='irods')
-
-def install_custom_packages(ctx, containers):
-    package_suffix = execution_context.package_context[ctx.platform_name.lower()]['extension']
-
-    packages = get_package_list(ctx)
-
-    logging.info('packages to install [{}]'.format(packages))
-
-    tarfile_path = create_tarfile(ctx, packages)
-
-    for c in containers:
-        # Only the iRODS containers need to have packages installed
-        if context.is_catalog_database_container(c): continue
-
-        container = ctx.docker_client.containers.get(c.name)
-
-        irodsctl(container, 'stop')
-
-        path_to_packages_in_container = put_packages_in_container(container, tarfile_path)
-
-        package_list = ' '.join([p for p in packages if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
-
-        cmd = ' '.join([execution_context.package_context[ctx.platform_name.lower()]['command'], package_list])
-
-        execute.execute_command(container, cmd)
-
-        irodsctl(container, 'restart')
-
 def mkdir_p(path):
     try:
         os.makedirs(path)
@@ -187,6 +99,7 @@ def configure_irods_testing(docker_client, containers):
 
 if __name__ == "__main__":
     import argparse
+    import logs
 
     parser = argparse.ArgumentParser(description='Run iRODS tests in a consistent environment.')
     parser.add_argument('commands', metavar='COMMANDS', nargs='+',
@@ -242,7 +155,8 @@ if __name__ == "__main__":
 
         # Install the custom packages on all the iRODS containers, if specified.
         if ctx.custom_packages:
-            install_custom_packages(ctx, containers)
+            irods_packages = ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(ctx.database_name)]
+            install.install_irods_packages(ctx.docker_client, ctx.platform_name, ctx.custom_packages, irods_packages, containers)
 
         configure_irods_testing(ctx.docker_client, containers)
 
