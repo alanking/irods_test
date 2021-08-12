@@ -7,16 +7,17 @@ def execute_command(container, command, user='', workdir=None, stream_output=Fal
 
     logging.debug('executing on [{0}] [{1}]'.format(container.name, command))
 
-    exec_out = container.exec_run(command, user=user, workdir=workdir, stream=stream_output)
+    exec_instance = container.client.api.exec_create(container.id, command, user=user, workdir=workdir)
+    exec_out = container.client.api.exec_start(exec_instance['Id'], stream=stream_output)
 
     previous_log_level = logging.getLogger().getEffectiveLevel()
+    logging.getLogger().setLevel(logging.INFO)
 
     try:
-        logging.getLogger().setLevel(logging.INFO)
-
-        # Stream output from the executing command
+        # Stream output from the executing command. A StopIteration exception is raised
+        # by the generator returned by the docker-py API when there is no more output.
         while stream_output:
-            logging.info(next(exec_out.output).decode(OUTPUT_ENCODING))
+            logging.info(next(exec_out).decode(OUTPUT_ENCODING))
 
     except StopIteration:
         logging.info('done')
@@ -24,13 +25,13 @@ def execute_command(container, command, user='', workdir=None, stream_output=Fal
     finally:
         logging.getLogger().setLevel(previous_log_level)
 
-    return exec_out.exit_code
+    return container.client.api.exec_inspect(exec_instance['Id'])['ExitCode']
 
 if __name__ == "__main__":
     import argparse
     import logs
 
-    parser = argparse.ArgumentParser(description='Run commands on a running container.')
+    parser = argparse.ArgumentParser(description='Run commands on a running container as iRODS service account.')
     parser.add_argument('commands', metavar='COMMANDS', nargs='+',
                         help='Space-delimited list of commands to be run')
     parser.add_argument('--run-on-container', '-t', metavar='TARGET_CONTAINER', dest='run_on', type=str,
