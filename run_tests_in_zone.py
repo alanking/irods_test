@@ -13,25 +13,10 @@ import execute
 #script_path = os.path.dirname(os.path.realpath(__file__))
 
 class execution_context:
-    package_context = {
-        'centos' : {
-            'command' : 'rpm -U --force',
-            'extension' : 'rpm'
-         },
-        'ubuntu' : {
-            'command' : 'dpkg -i',
-            'extension' : 'deb'
-        }
-    }
-
-    PROJECT_NAME = 'irods_test_base'
-
     def __init__(self, args, dc):
         self.docker_client  = dc
         self.run_on         = args.run_on
         self.commands       = list(args.commands)
-        self.setup_timeout  = args.setup_timeout
-        self.custom_packages = args.custom_packages
 
         self.platform_name, self.platform_version = args.platform.split(':')
         self.database_name, self.database_version = args.database.split(':')
@@ -92,7 +77,7 @@ def configure_irods_testing(docker_client, containers):
     make_script_executable = 'chmod 544 {}'.format(path_to_univmss_script)
 
     for container in containers:
-        c = ctx.docker_client.containers.get(container.name)
+        c = docker_client.containers.get(container.name)
         execute.execute_command(c, copy_from_template, user='irods', workdir='/var/lib/irods')
         execute.execute_command(c, remove_template_from_commands, user='irods', workdir='/var/lib/irods')
         execute.execute_command(c, make_script_executable, user='irods', workdir='/var/lib/irods')
@@ -116,7 +101,7 @@ if __name__ == "__main__":
                         help='The tag of the database container to use (e.g. postgres:10.12')
     parser.add_argument('--job-name', '-j', metavar='JOB_NAME', dest='job_name', type=str,
                         help='Name of the test run')
-    parser.add_argument('--install-packages-from', '-i', metavar='PATH_TO_DIRECTORY_WITH_PACKAGES', dest='custom_packages', type=str,
+    parser.add_argument('--install-packages-from', '-i', metavar='PATH_TO_DIRECTORY_WITH_PACKAGES', dest='package_directory', type=str,
                         help='Full path to local directory which contains packages to be installed on iRODS containers.')
     parser.add_argument('--verbose', '-v', dest='verbosity', action='count', default=1,
                         help='Increase the level of output to stdout. CRITICAL and ERROR messages will always be printed.')
@@ -151,12 +136,12 @@ if __name__ == "__main__":
         logging.debug('got container to run on [{}]'.format(c.name))
 
         # Ensure that iRODS setup has completed
-        wait_for_setup_to_finish(c, ctx.setup_timeout)
+        wait_for_setup_to_finish(c, args.setup_timeout)
 
         # Install the custom packages on all the iRODS containers, if specified.
-        if ctx.custom_packages:
+        if args.package_directory:
             irods_packages = ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(ctx.database_name)]
-            install.install_irods_packages(ctx.docker_client, ctx.platform_name, ctx.custom_packages, irods_packages, containers)
+            install.install_irods_packages(ctx.docker_client, ctx.platform_name, args.package_directory, irods_packages, containers)
 
         configure_irods_testing(ctx.docker_client, containers)
 
