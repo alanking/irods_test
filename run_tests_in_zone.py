@@ -5,7 +5,7 @@ import os
 import logging
 
 # local modules
-import logger
+import logs
 import execute
 
 # TODO: Way to know the absolute path of the thing that is actually running (this script)
@@ -81,30 +81,6 @@ def wait_for_setup_to_finish(c, timeout_in_seconds):
         now = time.time()
 
     raise RuntimeError('timed out while waiting for iRODS to finish setting up')
-
-def collect_logs(docker_client, containers, output_directory, logfile_path='/var/lib/irods/log'):
-    od = os.path.join(output_directory, 'logs')
-    if not os.path.exists(od):
-        os.makedirs(od)
-
-    for c in containers:
-        if is_catalog_database_container(c): continue
-
-        log_archive_path = os.path.join(od, c.name)
-
-        logging.info('saving log [{}]'.format(log_archive_path))
-
-        try:
-            # TODO: get server version to determine path of the log files
-            bits, _ = docker_client.containers.get(c.name).get_archive(logfile_path)
-
-            with open(log_archive_path, 'wb') as f:
-                for chunk in bits:
-                    f.write(chunk)
-
-        except Exception as e:
-            logging.error('failed to collect log [{}]'.format(log_archive_path))
-            logging.error(e)
 
 def put_packages_in_container(container, tarfile_path):
     # Copy packages tarball into container
@@ -243,7 +219,7 @@ if __name__ == "__main__":
 
     mkdir_p(ctx.output_directory)
 
-    logger.configure(args.verbosity, os.path.join(ctx.output_directory, 'script_output.log'))
+    logs.configure(args.verbosity, os.path.join(ctx.output_directory, 'script_output.log'))
 
     path_to_project = os.path.join(os.path.abspath('projects'), ctx.project_name)
 
@@ -287,7 +263,7 @@ if __name__ == "__main__":
 
     finally:
         logging.info('collecting logs [{}]'.format(ctx.output_directory))
-        collect_logs(ctx.docker_client, containers, ctx.output_directory)
+        logs.collect_logs(ctx.docker_client, containers, ctx.output_directory)
 
         p.down(include_volumes = True, remove_image_type = False)
 
