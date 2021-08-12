@@ -1,27 +1,15 @@
+# grown-up modules
 import compose.cli.command
 import docker
 import os
 import logging
 
+# local modules
+import logger
 import execute
 
 # TODO: Way to know the absolute path of the thing that is actually running (this script)
 #script_path = os.path.dirname(os.path.realpath(__file__))
-
-def init_logger(verbosity=1, log_filename=None):
-    # CRITICAL messages will always be printed, but anything after that is a function of the number of -v
-    level = logging.CRITICAL - 10 * verbosity
-
-    handlers = [logging.StreamHandler()]
-
-    if log_filename:
-        handlers.append(logging.FileHandler(os.path.abspath(log_filename)))
-
-    logging.basicConfig(
-        level = level if level > logging.NOTSET else logging.DEBUG,
-        format = '%(asctime)-15s %(levelname)s - %(message)s',
-        handlers = handlers
-    )
 
 class execution_context:
     package_context = {
@@ -255,7 +243,7 @@ if __name__ == "__main__":
 
     mkdir_p(ctx.output_directory)
 
-    init_logger(args.verbosity, os.path.join(ctx.output_directory, 'script_output.log'))
+    logger.configure(args.verbosity, os.path.join(ctx.output_directory, 'script_output.log'))
 
     path_to_project = os.path.join(os.path.abspath('projects'), ctx.project_name)
 
