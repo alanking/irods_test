@@ -122,7 +122,7 @@ def put_packages_in_container(container, tarfile_path):
     # Copy packages tarball into container
     path_to_packages_dir_in_container = '/' + os.path.basename(tarfile_path)[:len('.tar') * -1]
 
-    logging.info('putting tarfile [{0}] in container [{1}] at [{2}]'.format(
+    logging.debug('putting tarfile [{0}] in container [{1}] at [{2}]'.format(
         tarfile_path, container.name, path_to_packages_dir_in_container))
 
     with open(tarfile_path, 'rb') as tf:
@@ -144,7 +144,7 @@ def create_tarfile(ctx, members):
     tarfile_name = ctx.job_name + '_packages.tar'
     tarfile_path = os.path.join(ctx.output_directory, tarfile_name)
 
-    logging.info('creating tarfile [{}]'.format(tarfile_path))
+    logging.debug('creating tarfile [{}]'.format(tarfile_path))
 
     with tarfile.open(tarfile_path, 'w') as f:
         for m in members:
@@ -213,6 +213,19 @@ def mkdir_p(path):
         if e.errno != errno.EEXIST or not os.path.isdir(path):
             raise
 
+def configure_irods_testing(docker_client, containers):
+    # Make sure univMSS interface is configured for testing
+    path_to_univmss_script = os.path.join('/var', 'lib', 'irods', 'msiExecCmd_bin', 'univMSSInterface.sh')
+    copy_from_template = 'cp {0}.template {0}'.format(path_to_univmss_script)
+    remove_template_from_commands = 'sed -i \"s/template-//g\" {}'.format(path_to_univmss_script)
+    make_script_executable = 'chmod 544 {}'.format(path_to_univmss_script)
+
+    for container in containers:
+        c = ctx.docker_client.containers.get(container.name)
+        execute.execute_command(c, copy_from_template, user='irods', workdir='/var/lib/irods')
+        execute.execute_command(c, remove_template_from_commands, user='irods', workdir='/var/lib/irods')
+        execute.execute_command(c, make_script_executable, user='irods', workdir='/var/lib/irods')
+
 if __name__ == "__main__":
     import argparse
 
@@ -271,6 +284,8 @@ if __name__ == "__main__":
         # Install the custom packages on all the iRODS containers, if specified.
         if ctx.custom_packages:
             install_custom_packages(ctx, containers)
+
+        configure_irods_testing(ctx.docker_client, containers)
 
         # Serially execute the list of commands provided in the input
         for command in ctx.commands:

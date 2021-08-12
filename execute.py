@@ -5,7 +5,7 @@ import os
 def execute_command(container, command, user='', workdir=None, stream_output=False):
     OUTPUT_ENCODING = 'utf-8'
 
-    logging.info('executing on [{0}] [{1}]'.format(container.name, command))
+    logging.debug('executing on [{0}] [{1}]'.format(container.name, command))
 
     exec_out = container.exec_run(command, user=user, workdir=workdir, stream=stream_output)
 
