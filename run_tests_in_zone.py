@@ -5,6 +5,7 @@ import os
 import logging
 
 # local modules
+import container
 import logs
 import execute
 
@@ -53,13 +54,7 @@ class execution_context:
             import tempfile
             self.output_directory = os.path.join(tempfile.mkdtemp(prefix=self.project_name), self.job_name)
 
-def is_catalog_database_container(container):
-    return 'icat' in container.name
-
-def is_catalog_service_provider_container(container):
-    return 'provider' in container.name
-
-def is_database_plugin(p):
+def is_package_database_plugin(p):
     return 'database' in p
 
 def wait_for_setup_to_finish(c, timeout_in_seconds):
@@ -154,7 +149,7 @@ def install_custom_packages(ctx, containers):
 
     for c in containers:
         # Only the iRODS containers need to have packages installed
-        if is_catalog_database_container(c): continue
+        if container.is_catalog_database_container(c): continue
 
         container = ctx.docker_client.containers.get(c.name)
 
@@ -162,7 +157,7 @@ def install_custom_packages(ctx, containers):
 
         path_to_packages_in_container = put_packages_in_container(container, tarfile_path)
 
-        package_list = ' '.join([p for p in packages if not is_database_plugin(p) or is_catalog_service_provider_container(container)])
+        package_list = ' '.join([p for p in packages if not is_package_database_plugin(p) or container.is_catalog_service_provider_container(container)])
 
         cmd = ' '.join([execution_context.package_context[ctx.platform_name.lower()]['command'], package_list])
 

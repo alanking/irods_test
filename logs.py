@@ -1,3 +1,4 @@
+import container
 import docker
 import logging
 import os
@@ -24,7 +25,7 @@ def collect_logs(docker_client, containers, output_directory, logfile_path='/var
         os.makedirs(od)
 
     for c in containers:
-        if is_catalog_database_container(c): continue
+        if container.is_catalog_database_container(c): continue
 
         log_archive_path = os.path.join(od, c.name)
 
