@@ -8,16 +8,21 @@ import os
 import context
 import execute
 
-package_context = {
-    'centos' : {
-        'command' : 'rpm -U --force',
-        'extension' : 'rpm'
-     },
-    'ubuntu' : {
-        'command' : 'dpkg -i',
-        'extension' : 'deb'
-    }
-}
+def platform_upgrade_command(platform):
+    if 'centos' in platform:
+        return 'rpm -U --force'
+    elif 'ubuntu' in platform:
+        return 'dpkg -i'
+    else:
+        raise RuntimeError('unsupported platform [{}]'.format(platform))
+
+def package_filename_extension(platform):
+    if 'centos' in platform:
+        return 'rpm'
+    elif 'ubuntu' in platform:
+        return 'deb'
+    else:
+        raise RuntimeError('unsupported platform [{}]'.format(platform))
 
 def put_packages_in_container(container, tarfile_path):
     # Copy packages tarball into container
@@ -34,7 +39,7 @@ def put_packages_in_container(container, tarfile_path):
 
 
 def install_package(container, platform, full_path_to_package):
-    cmd = ' '.join([execution_context.package_context[platform.lower()]['command'], full_path_to_package])
+    cmd = ' '.join([platform_upgrade_command(platform), full_path_to_package])
 
     execute.execute_command(container, cmd)
 
@@ -61,8 +66,6 @@ def get_list_of_package_paths(platform_name, package_directory, package_name_lis
     if not package_directory:
         raise RuntimeError('Attempting to install custom packages from unspecified location')
 
-    package_suffix = package_context[platform_name.lower()]['extension']
-
     package_path = os.path.abspath(package_directory)
 
     logging.debug('listing for [{}]:\n{}'.format(package_path, os.listdir(package_path)))
@@ -70,7 +73,7 @@ def get_list_of_package_paths(platform_name, package_directory, package_name_lis
     packages = list()
 
     for p in package_name_list:
-        p_glob = os.path.join(package_path, p + '*.{}'.format(package_suffix))
+        p_glob = os.path.join(package_path, p + '*.{}'.format(package_filename_extension(platform_name)))
 
         logging.debug('looking for packages like [{}]'.format(p_glob))
 
@@ -104,7 +107,7 @@ def install_irods_packages(docker_client, platform_name, package_directory, pack
 
         package_list = ' '.join([p for p in packages if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
 
-        cmd = ' '.join([package_context[platform_name.lower()]['command'], package_list])
+        cmd = ' '.join([platform_upgrade_command(platform_name), package_list])
 
         execute.execute_command(container, cmd)
 
