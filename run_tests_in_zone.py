@@ -39,9 +39,6 @@ class execution_context:
             import tempfile
             self.output_directory = os.path.join(tempfile.mkdtemp(prefix=self.project_name), self.job_name)
 
-def is_package_database_plugin(p):
-    return 'database' in p
-
 def wait_for_setup_to_finish(c, timeout_in_seconds):
     import time
 
@@ -72,15 +69,23 @@ def mkdir_p(path):
 def configure_irods_testing(docker_client, containers):
     # Make sure univMSS interface is configured for testing
     path_to_univmss_script = os.path.join('/var', 'lib', 'irods', 'msiExecCmd_bin', 'univMSSInterface.sh')
+    chown_msiexec_directory = 'chown irods:irods {}'.format(os.path.dirname(path_to_univmss_script))
     copy_from_template = 'cp {0}.template {0}'.format(path_to_univmss_script)
     remove_template_from_commands = 'sed -i \"s/template-//g\" {}'.format(path_to_univmss_script)
     make_script_executable = 'chmod 544 {}'.format(path_to_univmss_script)
 
     for container in containers:
+        if context.is_catalog_database_container(container): continue
+
         c = docker_client.containers.get(container.name)
-        execute.execute_command(c, copy_from_template, user='irods', workdir='/var/lib/irods')
-        execute.execute_command(c, remove_template_from_commands, user='irods', workdir='/var/lib/irods')
-        execute.execute_command(c, make_script_executable, user='irods', workdir='/var/lib/irods')
+        if execute.execute_command(c, chown_msiexec_directory) is not 0:
+            raise RuntimeError('failed to change ownership to msiExecCmd_bin')
+        if execute.execute_command(c, copy_from_template, user='irods', workdir='/var/lib/irods') is not 0:
+            raise RuntimeError('failed to copy univMSSInterface.sh template file')
+        if execute.execute_command(c, remove_template_from_commands, user='irods', workdir='/var/lib/irods') is not 0:
+            raise RuntimeError('failed to modify univMSSInterface.sh template file')
+        if execute.execute_command(c, make_script_executable, user='irods', workdir='/var/lib/irods') is not 0:
+            raise RuntimeError('failed to change permissions on univMSSInterface.sh')
 
 if __name__ == "__main__":
     import argparse
@@ -131,12 +136,12 @@ if __name__ == "__main__":
         logging.debug('bringing up project [{}]'.format(p.name))
         containers = p.up()
 
-        # Get the container on which the command is to be executed
-        c = ctx.docker_client.containers.get('_'.join([p.name, ctx.run_on, '1']))
-        logging.debug('got container to run on [{}]'.format(c.name))
+        # Ensure that iRODS setup has completed on every machine in the topology
+        for c in containers:
+            if context.is_catalog_database_container(c): continue
 
-        # Ensure that iRODS setup has completed
-        wait_for_setup_to_finish(c, args.setup_timeout)
+            container = ctx.docker_client.containers.get(c.name)
+            wait_for_setup_to_finish(container, args.setup_timeout)
 
         # Install the custom packages on all the iRODS containers, if specified.
         if args.package_directory:
@@ -145,10 +150,14 @@ if __name__ == "__main__":
 
         configure_irods_testing(ctx.docker_client, containers)
 
+        # Get the container on which the command is to be executed
+        container = ctx.docker_client.containers.get('_'.join([p.name, ctx.run_on, '1']))
+        logging.debug('got container to run on [{}]'.format(container.name))
+
         # Serially execute the list of commands provided in the input
         for command in ctx.commands:
             # TODO: on --continue, save only failure ec's/commands
-            ec = execute.execute_command(c, command, user='irods', workdir='/var/lib/irods', stream_output=True)
+            ec = execute.execute_command(container, command, user='irods', workdir='/var/lib/irods', stream_output=True)
 
     except Exception as e:
         logging.critical(e)
