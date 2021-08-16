@@ -15,7 +15,6 @@ import execute
 class execution_context:
     def __init__(self, args, dc):
         self.docker_client  = dc
-        self.run_on         = args.run_on
         self.commands       = list(args.commands)
 
         self.platform_name, self.platform_version = args.platform.split(':')
@@ -151,7 +150,7 @@ if __name__ == "__main__":
         configure_irods_testing(ctx.docker_client, containers)
 
         # Get the container on which the command is to be executed
-        container = ctx.docker_client.containers.get('_'.join([p.name, ctx.run_on, '1']))
+        container = ctx.docker_client.containers.get('_'.join([p.name, args.run_on, '1']))
         logging.debug('got container to run on [{}]'.format(container.name))
 
         # Serially execute the list of commands provided in the input
