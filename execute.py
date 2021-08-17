@@ -49,6 +49,10 @@ if __name__ == "__main__":
                         help='The name of the container on which the command will run. By default, runs on all containers in project.')
     parser.add_argument('--verbose', '-v', dest='verbosity', action='count', default=1,
                         help='Increase the level of output to stdout. CRITICAL and ERROR messages will always be printed.')
+    parser.add_argument('--user', '-u', metavar='USER', dest='user', default='root',
+                        help='Name of the user to be when executing the commands.')
+    parser.add_argument('--workdir', '-w', metavar='WORKING_DIRECTORY', dest='workdir', default='/',
+                        help='Working directory for execution of commands.')
 
     args = parser.parse_args()
 
@@ -68,7 +72,7 @@ if __name__ == "__main__":
         # Get the container on which the command is to be executed
         containers = list()
         if args.run_on:
-            containers.append(dc.containers.get('_'.join([p.name, args.run_on, '1'])))
+            containers.append(dc.containers.get(context.get_container_name_from_project(p.name, args.run_on)))
         else:
             containers = p.containers()
 
@@ -80,7 +84,7 @@ if __name__ == "__main__":
             target_container = dc.containers.get(c.name)
             for command in args.commands:
                 # TODO: on --continue, save only failure ec's/commands
-                ec = execute_command(target_container, command, user='irods', workdir='/var/lib/irods', stream_output=True)
+                ec = execute_command(target_container, command, user=args.user, workdir=args.workdir, stream_output=True)
 
     except Exception as e:
         logging.critical(e)
