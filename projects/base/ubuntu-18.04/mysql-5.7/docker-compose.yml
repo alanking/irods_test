@@ -25,48 +25,17 @@ services:
     expose:
       - "3306"
     volumes:
-      - "../../catalogs/mysql-5.7/db_commands.sql:/docker-entrypoint-initdb.d/db_commands.sql:ro"
+      - "../../../catalogs/mysql-5.7/db_commands.sql:/docker-entrypoint-initdb.d/db_commands.sql:ro"
 
-  irods-catalog-provider:
-    build:
-      context: provider
-    hostname: icat.example.org
-    networks:
-      default:
-        aliases:
-          - icat.example.org
-    depends_on:
-      - icat
+    irods-catalog-provider:
+        build:
+            context: ..
+        depends_on:
+            - catalog
 
-  irods-catalog-consumer-resource1:
-    build:
-      context: consumer
-    hostname: resource1.example.org
-    networks:
-      default:
-        aliases:
-          - resource1.example.org
-    depends_on:
-      - irods-catalog-provider
+    irods-catalog-consumer:
+        build:
+            context: ..
+        depends_on:
+            - irods-catalog-provider
 
-  irods-catalog-consumer-resource2:
-    build:
-      context: consumer
-    hostname: resource2.example.org
-    networks:
-      default:
-        aliases:
-          - resource2.example.org
-    depends_on:
-      - irods-catalog-provider
-
-  irods-catalog-consumer-resource3:
-    build:
-      context: consumer
-    hostname: resource3.example.org
-    networks:
-      default:
-        aliases:
-          - resource3.example.org
-    depends_on:
-      - irods-catalog-provider
