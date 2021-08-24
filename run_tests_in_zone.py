@@ -43,14 +43,14 @@ def wait_for_setup_to_finish(c, timeout_in_seconds):
 
     FLAG_FILE = '/var/lib/irods/setup_complete'
 
-    logging.warning('waiting for iRODS to finish setting up [{}]'.format(c.name))
+    logging.info('waiting for iRODS to finish setting up [{}]'.format(c.name))
 
     start_time = time.time()
     now = start_time
 
     while now - start_time < timeout_in_seconds:
         if execute.execute_command(c, 'stat {}'.format(FLAG_FILE)) == 0:
-            logging.warning('iRODS has been set up (waited [{}] seconds)'.format(str(now - start_time)))
+            logging.info('iRODS has been set up (waited [{}] seconds)'.format(str(now - start_time)))
             return
 
         time.sleep(1)
@@ -136,6 +136,7 @@ if __name__ == "__main__":
         containers = p.up()
 
         # Ensure that iRODS setup has completed on every machine in the topology
+        logging.info('waiting for iRODS to finish setting up')
         for c in containers:
             if context.is_catalog_database_container(c): continue
 
@@ -144,6 +145,7 @@ if __name__ == "__main__":
 
         # Install the custom packages on all the iRODS containers, if specified.
         if args.package_directory:
+            logging.warning('Installing packages from directory [{}]'.format(args.package_directory))
             irods_packages = ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(ctx.database_name)]
             install.install_irods_packages(ctx.docker_client, ctx.platform_name, args.package_directory, irods_packages, containers)
 
@@ -164,7 +166,7 @@ if __name__ == "__main__":
         raise
 
     finally:
-        logging.info('collecting logs [{}]'.format(ctx.output_directory))
+        logging.warning('collecting logs [{}]'.format(ctx.output_directory))
         logs.collect_logs(ctx.docker_client, containers, ctx.output_directory)
 
         p.down(include_volumes = True, remove_image_type = False)
