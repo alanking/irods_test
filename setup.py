@@ -21,7 +21,7 @@ class database_setup_strategy(object):
     def create_user(self, username, password):
         raise NotImplementedError('method not implemented for database strategy')
 
-    def elevate_privileges(self, database, username):
+    def grant_privileges(self, database, username):
         raise NotImplementedError('method not implemented for database strategy')
 
     def drop_database(self, name):
@@ -46,7 +46,7 @@ class postgres_database_setup_strategy(database_setup_strategy):
         return self.execute_psql_command(
             'create user {0} with password \'{1}\';'.format(username, password))
 
-    def elevate_privileges(self, database, username):
+    def grant_privileges(self, database, username):
         return self.execute_psql_command(
             'grant all privileges on database \\\"{0}\\\" to {1};'.format(database, username))
 
@@ -88,7 +88,7 @@ def setup_catalog(docker_client,
         #strat.drop_database(database_name)
         return ec
 
-    ec = strat.elevate_privileges(database_name, database_user)
+    ec = strat.grant_privileges(database_name, database_user)
     if ec is not 0:
         #strat.drop_database(database_name)
         #strat.drop_user(database_user)
