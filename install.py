@@ -160,8 +160,8 @@ if __name__ == "__main__":
     exit(
         install_irods_packages(
             docker.from_env(),
-            context.platform_name(args.platform),
-            context.database_name(args.database),
+            context.image_name(args.platform),
+            context.image_name(args.database),
             os.path.abspath(args.package_directory),
             p.containers()
         )

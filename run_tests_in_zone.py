@@ -14,8 +14,8 @@ import execute
 
 class execution_context:
     def __init__(self, args):
-        self.platform_name, self.platform_version = context.platform_name_and_version(args.platform)
-        self.database_name, self.database_version = context.database_name_and_version(args.database)
+        self.platform_name, self.platform_version = context.image_name_and_version(args.platform)
+        self.database_name, self.database_version = context.image_name_and_version(args.database)
 
         self.project_name = '-'.join([self.platform_name,
                                       self.platform_version,
