@@ -12,7 +12,7 @@ def platform_upgrade_command(platform):
     if 'centos' in platform:
         return 'rpm -U --force'
     elif 'ubuntu' in platform:
-        return 'apt install -fy'
+        return 'dpkg -i'
     else:
         raise RuntimeError('unsupported platform [{}]'.format(platform))
 
@@ -109,10 +109,7 @@ def install_irods_packages(docker_client, platform_name, package_directory, pack
 
         cmd = ' '.join([platform_upgrade_command(platform_name), package_list])
 
-        ec = execute.execute_command(container, cmd)
-        if ec is not 0:
-            logging.critical('failed to install packages ec=[{0}] container=[{1}]'.format(ec, container.name))
-            return ec
+        execute.execute_command(container, cmd)
 
         irodsctl(container, 'restart')
 
@@ -121,16 +118,14 @@ if __name__ == "__main__":
     import logs
 
     parser = argparse.ArgumentParser(description='Install a list of packages on a docker-compose project.')
-    parser.add_argument('project_path', metavar='PATH_TO_PROJECT_DIRECTORY', type=str,
-                        help='The path to the directory containing the docker-compose project file.')
+    parser.add_argument('project', metavar='PROJECT_NAME', type=str,
+                        help='Name of the docker-compose project on which to install packages.')
     parser.add_argument('package_directory', metavar='PATH_TO_DIRECTORY_WITH_PACKAGES', type=str,
                         help='Path to local directory which contains packages to be installed on iRODS containers.')
     parser.add_argument('packages', metavar='PACKAGE_NAMES', nargs='+',
                         help='Space-delimited list of iRODS packages to install')
     #parser.add_argument('--run-on-container', '-t', metavar='TARGET_CONTAINER', dest='run_on', type=str,
                         #help='The name of the container on which the command will run')
-    parser.add_argument('--project-name', metavar='PROJECT_NAME', type=str, dest='project_name',
-                        help='Name of the docker-compose project on which to install packages.')
     parser.add_argument('--os-platform-tag', '-p', metavar='OS_PLATFORM_IMAGE_TAG', dest='platform', type=str,
                         help='The tag of the base Docker image to use (e.g. centos:7)')
     parser.add_argument('--verbose', '-v', dest='verbosity', action='count', default=1,
@@ -142,7 +137,11 @@ if __name__ == "__main__":
 
     dc = docker.from_env()
 
-    p = compose.cli.command.get_project(args.project_path, project_name=args.project_name)
+    path_to_project = os.path.join(os.path.abspath('projects'), args.project)
 
-    exit(install_irods_packages(dc, args.platform, args.package_directory, list(args.packages), p.containers()))
+    p = compose.cli.command.get_project(path_to_project)
+
+    platform = args.project.split('-')[0] if not args.platform else args.platform
+
+    install_irods_packages(dc, platform, args.package_directory, list(args.packages), p.containers())
 
