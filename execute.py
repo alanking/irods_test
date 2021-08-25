@@ -41,12 +41,14 @@ if __name__ == "__main__":
     import logs
 
     parser = argparse.ArgumentParser(description='Run commands on a running container as iRODS service account.')
-    parser.add_argument('project', metavar='PROJECT_NAME', type=str,
-                        help='Name of the docker-compose project on which to install packages.')
+    parser.add_argument('project_path', metavar='PROJECT_PATH', type=str,
+                        help='Path to the docker-compose project on which packages will be installed.')
     parser.add_argument('commands', metavar='COMMANDS', nargs='+',
                         help='Space-delimited list of commands to be run')
     parser.add_argument('--run-on-container', '-t', metavar='TARGET_CONTAINER', dest='run_on', type=str,
                         help='The name of the container on which the command will run. By default, runs on all containers in project.')
+    parser.add_argument('--project-name', metavar='PROJECT_NAME', type=str, dest='project_name',
+                        help='Name of the docker-compose project on which to install packages.')
     parser.add_argument('--verbose', '-v', dest='verbosity', action='count', default=1,
                         help='Increase the level of output to stdout. CRITICAL and ERROR messages will always be printed.')
     parser.add_argument('--user', '-u', metavar='USER', dest='user', default='root',
@@ -61,27 +63,23 @@ if __name__ == "__main__":
     ec = 0
     containers = list()
 
-    dc = docker.from_env()
+    docker_client = docker.from_env()
 
     try:
-        # TODO: project_name parameter causes image explosion - can this be avoided?
-        #p = compose.cli.command.get_project(path_to_project, project_name=ctx.job_name)
-        path_to_project = os.path.join(os.path.abspath('projects'), args.project)
-        p = compose.cli.command.get_project(path_to_project)
+        p = compose.cli.command.get_project(os.path.abspath(args.project_path), project_name=args.project_name)
 
         # Get the container on which the command is to be executed
         containers = list()
         if args.run_on:
-            containers.append(dc.containers.get(context.get_container_name_from_project(p.name, args.run_on)))
+            containers.append(docker_client.containers.get(context.get_container_name_from_project(p.name, args.run_on)))
         else:
             containers = p.containers()
-
 
         # Serially execute the list of commands provided in the input
         for c in containers:
             if context.is_catalog_database_container(c): continue
 
-            target_container = dc.containers.get(c.name)
+            target_container = docker_client.containers.get(c.name)
             for command in args.commands:
                 # TODO: on --continue, save only failure ec's/commands
                 ec = execute_command(target_container, command, user=args.user, workdir=args.workdir, stream_output=True)
