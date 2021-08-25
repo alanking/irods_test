@@ -90,7 +90,6 @@ def irodsctl(container, cmd):
 # TODO: Want to make a more generic version of this
 def install_irods_packages(docker_client, platform_name, database_name, package_directory, containers):
     package_name_list = ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(database_name)]
-    print(package_name_list)
 
     packages = get_list_of_package_paths(platform_name, package_directory, package_name_list)
 
