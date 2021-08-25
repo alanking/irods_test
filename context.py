@@ -1,17 +1,13 @@
 def project_name(container_name):
-    print(container_name.split('_')[0])
     return container_name.split('_')[0]
 
 def service_name(container_name):
-    print(container_name.split('_')[1])
     return container_name.split('_')[1]
 
 def service_instance(container_name):
-    print(container_name.split('_')[2])
     return container_name.split('_')[2]
 
 def is_catalog_database_container(container):
-    print(container.name.split('_'))
     return service_name(container.name) == 'catalog'
 
 def is_catalog_service_provider_container(container):
