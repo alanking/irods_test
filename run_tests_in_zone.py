@@ -149,7 +149,7 @@ if __name__ == "__main__":
         configure_irods_testing(docker_client, containers)
 
         # Get the container on which the command is to be executed
-        container = docker_client.containers.get(context.get_container_name_from_project(p.name, args.run_on))
+        container = docker_client.containers.get(context.container_name(p.name, args.run_on))
         logging.debug('got container to run on [{}]'.format(container.name))
 
         # Serially execute the list of commands provided in the input

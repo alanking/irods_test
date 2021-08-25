@@ -1,11 +1,24 @@
+def project_name(container_name):
+    print(container_name.split('_')[0])
+    return container_name.split('_')[0]
+
+def service_name(container_name):
+    print(container_name.split('_')[1])
+    return container_name.split('_')[1]
+
+def service_instance(container_name):
+    print(container_name.split('_')[2])
+    return container_name.split('_')[2]
+
 def is_catalog_database_container(container):
-    return 'icat' in container.name
+    print(container.name.split('_'))
+    return service_name(container.name) == 'catalog'
 
 def is_catalog_service_provider_container(container):
-    return 'provider' in container.name
+    return service_name(container.name) == 'irods-catalog-provider'
 
-def get_container_name_from_project(project_name, container_base_name, instance=1):
-    return '_'.join([project_name, container_base_name, str(instance)])
+def container_name(project_name, service_name, service_instance=1):
+    return '_'.join([project_name, service_name, str(service_instance)])
 
 def image_name_and_version(image_tag):
     return image_tag.split(':')

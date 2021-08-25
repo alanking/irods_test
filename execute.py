@@ -71,7 +71,7 @@ if __name__ == "__main__":
         # Get the container on which the command is to be executed
         containers = list()
         if args.run_on:
-            containers.append(docker_client.containers.get(context.get_container_name_from_project(p.name, args.run_on)))
+            containers.append(docker_client.containers.get(args.run_on))
         else:
             containers = p.containers()
 

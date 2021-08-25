@@ -112,7 +112,15 @@ def install_irods_packages(docker_client, platform_name, database_name, package_
 
         cmd = ' '.join([platform_upgrade_command(platform_name), package_list])
 
-        execute.execute_command(container, cmd)
+        logging.debug('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
+
+        ec = execute.execute_command(container, cmd)
+
+        if ec is not 0:
+            logging.error(
+                'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, c.name))
+
+            return ec
 
         irodsctl(container, 'restart')
 
@@ -139,6 +147,15 @@ if __name__ == "__main__":
     logs.configure(args.verbosity)
 
     p = compose.cli.command.get_project(os.path.abspath(args.project_path), project_name=args.project_name)
+
+    if len(p.containers()) is 0:
+        logging.critical(
+            'no containers found for project [directory=[{0}], name=[{1}]]'.format(
+            os.path.abspath(args.project_path), args.project_name))
+
+        exit(1)
+
+    logging.debug('containers on project [{}]'.format([c.name for c in p.containers()]))
 
     exit(
         install_irods_packages(
