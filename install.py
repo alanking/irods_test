@@ -12,7 +12,7 @@ def platform_upgrade_command(platform):
     if 'centos' in platform:
         return 'rpm -U --force'
     elif 'ubuntu' in platform:
-        return 'dpkg -i'
+        return 'apt install -fy'
     else:
         raise RuntimeError('unsupported platform [{}]'.format(platform))
 
@@ -87,12 +87,16 @@ def is_package_database_plugin(p):
 def irodsctl(container, cmd):
     execute.execute_command(container, '/var/lib/irods/irodsctl ' + cmd, user='irods')
 
-def install_irods_packages(docker_client, platform_name, package_directory, package_name_list, containers):
-    # TODO: output directory should contain the tarfile of packages for archaeological purposes
+# TODO: Want to make a more generic version of this
+def install_irods_packages(docker_client, platform_name, database_name, package_directory, containers):
+    package_name_list = ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(database_name)]
+    print(package_name_list)
+
     packages = get_list_of_package_paths(platform_name, package_directory, package_name_list)
 
     logging.info('packages to install [{}]'.format(packages))
 
+    # TODO: output directory should contain the tarfile of packages for archaeological purposes
     tarfile_path = create_tarfile(packages)
 
     for c in containers:
@@ -117,17 +121,17 @@ if __name__ == "__main__":
     import argparse
     import logs
 
-    parser = argparse.ArgumentParser(description='Install a list of packages on a docker-compose project.')
-    parser.add_argument('project', metavar='PROJECT_NAME', type=str,
-                        help='Name of the docker-compose project on which to install packages.')
+    parser = argparse.ArgumentParser(description='Install iRODS packages from a local directory to a docker-compose project.')
+    parser.add_argument('project_path', metavar='PROJECT_PATH', type=str,
+                        help='Path to the docker-compose project on which packages will be installed.')
     parser.add_argument('package_directory', metavar='PATH_TO_DIRECTORY_WITH_PACKAGES', type=str,
-                        help='Path to local directory which contains packages to be installed on iRODS containers.')
-    parser.add_argument('packages', metavar='PACKAGE_NAMES', nargs='+',
-                        help='Space-delimited list of iRODS packages to install')
-    #parser.add_argument('--run-on-container', '-t', metavar='TARGET_CONTAINER', dest='run_on', type=str,
-                        #help='The name of the container on which the command will run')
-    parser.add_argument('--os-platform-tag', '-p', metavar='OS_PLATFORM_IMAGE_TAG', dest='platform', type=str,
+                        help='Path to local directory which contains iRODS packages to be installed.')
+    parser.add_argument('--project-name', metavar='PROJECT_NAME', type=str, dest='project_name',
+                        help='Name of the docker-compose project on which to install packages.')
+    parser.add_argument('--os-platform-tag', '-p', metavar='OS_PLATFORM_IMAGE_TAG', dest='platform', type=str, default='ubuntu:18.04',
                         help='The tag of the base Docker image to use (e.g. centos:7)')
+    parser.add_argument('--database-tag', '-d', metavar='DATABASE_IMAGE_TAG', dest='database', type=str, default='postgres:10.12',
+                        help='The tag of the database container to use (e.g. postgres:10.12')
     parser.add_argument('--verbose', '-v', dest='verbosity', action='count', default=1,
                         help='Increase the level of output to stdout. CRITICAL and ERROR messages will always be printed.')
 
@@ -135,13 +139,15 @@ if __name__ == "__main__":
 
     logs.configure(args.verbosity)
 
-    dc = docker.from_env()
+    p = compose.cli.command.get_project(os.path.abspath(args.project_path), project_name=args.project_name)
 
-    path_to_project = os.path.join(os.path.abspath('projects'), args.project)
-
-    p = compose.cli.command.get_project(path_to_project)
-
-    platform = args.project.split('-')[0] if not args.platform else args.platform
-
-    install_irods_packages(dc, platform, args.package_directory, list(args.packages), p.containers())
+    exit(
+        install_irods_packages(
+            docker.from_env(),
+            context.platform_name(args.platform),
+            context.database_name(args.database),
+            os.path.abspath(args.package_directory),
+            p.containers()
+        )
+    )
 

@@ -13,12 +13,9 @@ import execute
 #script_path = os.path.dirname(os.path.realpath(__file__))
 
 class execution_context:
-    def __init__(self, args, dc):
-        self.docker_client  = dc
-        self.commands       = list(args.commands)
-
-        self.platform_name, self.platform_version = args.platform.split(':')
-        self.database_name, self.database_version = args.database.split(':')
+    def __init__(self, args):
+        self.platform_name, self.platform_version = context.platform_name_and_version(args.platform)
+        self.database_name, self.database_version = context.database_name_and_version(args.database)
 
         self.project_name = '-'.join([self.platform_name,
                                       self.platform_version,
@@ -112,7 +109,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    ctx = execution_context(args, docker.from_env())
+    docker_client = docker.from_env()
+    ctx = execution_context(args)
 
     mkdir_p(ctx.output_directory)
 
@@ -140,23 +138,22 @@ if __name__ == "__main__":
         for c in containers:
             if context.is_catalog_database_container(c): continue
 
-            container = ctx.docker_client.containers.get(c.name)
+            container = docker_client.containers.get(c.name)
             wait_for_setup_to_finish(container, args.setup_timeout)
 
         # Install the custom packages on all the iRODS containers, if specified.
         if args.package_directory:
             logging.warning('Installing packages from directory [{}]'.format(args.package_directory))
-            irods_packages = ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(ctx.database_name)]
-            install.install_irods_packages(ctx.docker_client, ctx.platform_name, args.package_directory, irods_packages, containers)
+            install.install_irods_packages(docker_client, ctx.platform_name, ctx.database_name, args.package_directory, containers)
 
-        configure_irods_testing(ctx.docker_client, containers)
+        configure_irods_testing(docker_client, containers)
 
         # Get the container on which the command is to be executed
-        container = ctx.docker_client.containers.get(context.get_container_name_from_project(p.name, args.run_on))
+        container = docker_client.containers.get(context.get_container_name_from_project(p.name, args.run_on))
         logging.debug('got container to run on [{}]'.format(container.name))
 
         # Serially execute the list of commands provided in the input
-        for command in ctx.commands:
+        for command in list(args.commands):
             # TODO: on --continue, save only failure ec's/commands
             ec = execute.execute_command(container, command, user='irods', workdir='/var/lib/irods', stream_output=True)
 
@@ -167,7 +164,7 @@ if __name__ == "__main__":
 
     finally:
         logging.warning('collecting logs [{}]'.format(ctx.output_directory))
-        logs.collect_logs(ctx.docker_client, containers, ctx.output_directory)
+        logs.collect_logs(docker_client, containers, ctx.output_directory)
 
         p.down(include_volumes = True, remove_image_type = False)
 
