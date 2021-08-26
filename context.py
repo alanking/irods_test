@@ -19,6 +19,10 @@ def service_instance(container_name):
 def container_name(project_name, service_name, service_instance=1):
     return '_'.join([project_name, service_name, str(service_instance)])
 
+def container_hostname(container):
+    import docker
+    return container.client.api.inspect_container(container.name)['Config']['Hostname']
+
 def image_name_and_tag(image_tag):
     return image_tag.split(':')
 

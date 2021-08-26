@@ -11,6 +11,7 @@ import execute
 class database_setup_strategy(object):
     def __init__(self, container):
         self.container = container
+        self.port = port
 
     def execute_psql_command(self, psql_cmd):
         raise NotImplementedError('method not implemented for database strategy')
@@ -72,6 +73,7 @@ def setup_catalog(docker_client,
                   database_name='ICAT',
                   database_user='irods',
                   database_password='testpassword'):
+    logging.debug('setting up catalog [{}]'.format(project_name))
 
     container_name = context.irods_catalog_database_container(project_name, service_instance)
 
@@ -81,22 +83,218 @@ def setup_catalog(docker_client,
 
     ec = strat.create_database(database_name)
     if ec is not 0:
-        return ec
+        raise RuntimeError('failed to create database [{}]'.format(database_name))
 
     ec = strat.create_user(database_user, database_password)
     if ec is not 0:
-        #strat.drop_database(database_name)
-        return ec
+        raise RuntimeError('failed to create user [{}]'.format(database_user))
 
     ec = strat.grant_privileges(database_name, database_user)
     if ec is not 0:
-        #strat.drop_database(database_name)
-        #strat.drop_user(database_user)
-        return ec
+        raise RuntimeError('failed to grant privileges to user [{0}] on database [{1}]'.format(database_user, database_name))
 
     strat.list_databases()
 
-    return 0
+class setup_input_builder(object):
+    def __init__(self):
+        self.service_account_name = ''
+        self.service_account_group = ''
+        self.catalog_service_role = ''
+
+        self.odbc_driver = ''
+        self.database_server_hostname = 'localhost'
+        self.database_server_port = 5432
+        self.database_name = 'ICAT'
+        self.database_username = 'irods'
+        self.database_password = 'testpassword'
+        self.stored_passwords_salt = ''
+
+        self.zone_name = 'tempZone'
+        self.zone_port = 1247
+        self.parallel_port_range_begin = 20000
+        self.parallel_port_range_end = 20199
+        self.control_plane_port = 1248
+        self.schema_validation_base_uri = ''
+        self.admin_username = 'rods'
+
+        self.zone_key = 'TEMPORARY_ZONE_KEY'
+        self.negotiation_key = '32_byte_server_negotiation_key__'
+        self.control_plane_key = '32_byte_server_control_plane_key'
+        self.admin_password = 'rods'
+
+        self.vault_directory = ''
+
+    def service_account(self,
+                        service_account_name='',
+                        service_account_group='',
+                        catalog_service_role=''):
+        self.service_account_name = service_account_name
+        self.service_account_group = service_account_group
+        self.catalog_service_role = catalog_service_role
+
+        return self
+
+
+    def database_connection(self,
+                            odbc_driver='',
+                            database_server_hostname='localhost',
+                            database_server_port=5432,
+                            database_name='ICAT',
+                            database_username='irods',
+                            database_password='testpassword',
+                            stored_passwords_salt=''):
+        self.odbc_driver = odbc_driver
+        self.database_server_hostname = database_server_hostname
+        self.database_server_port = database_server_port
+        self.database_name = database_name
+        self.database_username = database_username
+        self.database_password = database_password
+        self.stored_passwords_salt = stored_passwords_salt
+
+        return self
+
+
+    def server_options(self,
+                       zone_name='tempZone',
+                       zone_port=1247,
+                       parallel_port_range_begin=20000,
+                       parallel_port_range_end=20199,
+                       control_plane_port=1248,
+                       schema_validation_base_uri='',
+                       admin_username='rods'):
+        self.zone_name = zone_name
+        self.zone_port = zone_port
+        self.parallel_port_range_begin = parallel_port_range_begin
+        self.parallel_port_range_end = parallel_port_range_end
+        self.control_plane_port = control_plane_port
+        self.schema_validation_base_uri = schema_validation_base_uri
+        self.admin_username = admin_username
+
+        return self
+
+
+    def keys_and_passwords(self,
+                           zone_key = 'TEMPORARY_ZONE_KEY',
+                           negotiation_key = '32_byte_server_negotiation_key__',
+                           control_plane_key = '32_byte_server_control_plane_key',
+                           admin_password = 'rods'):
+        self.zone_key = zone_key
+        self.negotiation_key = negotiation_key
+        self.control_plane_key = control_plane_key
+        self.admin_password = admin_password
+
+        return self
+
+
+    def vault_directory(self, vault_directory=''):
+        self.vault_directory = vault_directory
+
+        return self
+
+
+    def catalog_service_provider_host(self, catalog_service_provider_host=''):
+        self.catalog_service_provider_host = catalog_service_provider_host
+
+        return self
+
+
+    def build_input_for_catalog_consumer(self):
+        # The setup script defaults catalog service consumer option as 2
+        role = 2
+        return '\n'.join([
+            str(self.service_account_name),
+            str(self.service_account_group),
+            str(role),
+
+            str(self.catalog_service_provider_host),
+
+            str(self.zone_name),
+            str(self.zone_port),
+            str(self.parallel_port_range_begin),
+            str(self.parallel_port_range_end),
+            str(self.control_plane_port),
+            str(self.schema_validation_base_uri),
+            str(self.admin_username),
+
+            str(self.zone_key),
+            str(self.negotiation_key),
+            str(self.control_plane_key),
+            str(self.admin_password),
+
+            str(self.vault_directory)
+        ])
+
+    def build_input_for_catalog_provider(self):
+        role = ''
+        return '\n'.join([
+            str(self.service_account_name),
+            str(self.service_account_group),
+            str(role),
+
+            str(self.odbc_driver),
+            str(self.database_server_hostname),
+            str(self.database_server_port),
+            str(self.database_name),
+            str(self.database_username),
+            'y', # confirmation of inputs
+            str(self.database_password),
+            str(self.stored_passwords_salt),
+
+            str(self.zone_name),
+            str(self.zone_port),
+            str(self.parallel_port_range_begin),
+            str(self.parallel_port_range_end),
+            str(self.control_plane_port),
+            str(self.schema_validation_base_uri),
+            str(self.admin_username),
+            'y', # confirmation of inputs
+
+            str(self.zone_key),
+            str(self.negotiation_key),
+            str(self.control_plane_key),
+            str(self.admin_password),
+            '', # confirmation of inputs
+
+            str(self.vault_directory),
+            '' # final confirmation
+        ])
+
+    def build(self):
+        build_for_role = {
+            'provider': self.build_input_for_catalog_provider,
+            'consumer': self.build_input_for_catalog_consumer
+        }
+
+        try:
+            return build_for_role[self.catalog_service_role]()
+
+        except KeyError:
+            raise NotImplementedError('unsupported catalog service role [{}]'.format(self.catalog_service_role))
+
+def setup_irods_catalog_provider(docker_client, project_name, service_instance=1):
+    logging.debug('setting up iRODS catalog provider [{}]'.format(project_name))
+
+    db_container_name = context.irods_catalog_database_container(project_name, service_instance)
+    db_container = docker_client.containers.get(db_container_name)
+
+    setup_input = (setup_input_builder()
+                    .service_account(catalog_service_role='provider')
+                    .database_connection(database_server_hostname=context.container_hostname(db_container))
+                    .build())
+
+    logging.debug('input to setup script [{}]'.format(setup_input))
+
+    csp_container_name = context.irods_catalog_provider_container(project_name, service_instance)
+    csp_container = docker_client.containers.get(csp_container_name)
+
+    execute.execute_command(csp_container, 'bash -c \'echo "{}" > /provider.input\''.format(setup_input))
+    execute.execute_command(csp_container, 'cat /provider.input')
+
+    path_to_setup_script = os.path.join('/var', 'lib', 'irods', 'scripts', 'setup_irods.py')
+    #cmd = 'echo "{0}" | python {1}'.format(setup_input, path_to_setup_script)
+    cmd = 'bash -c \'python {0} < /provider.input\''.format(path_to_setup_script)
+
+    return execute.execute_command(csp_container, cmd)
 
 if __name__ == "__main__":
     import argparse
@@ -124,14 +322,11 @@ if __name__ == "__main__":
 
     try:
         if args.setup_catalog:
-            logging.debug('setting up catalog [{}]'.format(p.name))
-            ec = setup_catalog(docker_client, p.name, args.database)
+            setup_catalog(docker_client, p.name, args.database)
 
-            if ec is not 0:
-                exit(ec)
+        setup_irods_catalog_provider(docker_client, p.name)
 
     except Exception as e:
         logging.critical(e)
-
         raise
 
