@@ -123,6 +123,8 @@ class setup_input_builder(object):
 
         self.vault_directory = ''
 
+        self.catalog_service_provider_host = 'localhost'
+
     def service_account(self,
                         service_account_name='',
                         service_account_group='',
@@ -155,6 +157,7 @@ class setup_input_builder(object):
 
     def server_options(self,
                        zone_name='tempZone',
+                       catalog_service_provider_host='localhost',
                        zone_port=1247,
                        parallel_port_range_begin=20000,
                        parallel_port_range_end=20199,
@@ -162,6 +165,7 @@ class setup_input_builder(object):
                        schema_validation_base_uri='',
                        admin_username='rods'):
         self.zone_name = zone_name
+        self.catalog_service_provider_host = catalog_service_provider_host
         self.zone_port = zone_port
         self.parallel_port_range_begin = parallel_port_range_begin
         self.parallel_port_range_end = parallel_port_range_end
@@ -191,12 +195,6 @@ class setup_input_builder(object):
         return self
 
 
-    def catalog_service_provider_host(self, catalog_service_provider_host=''):
-        self.catalog_service_provider_host = catalog_service_provider_host
-
-        return self
-
-
     def build_input_for_catalog_consumer(self):
         # The setup script defaults catalog service consumer option as 2
         role = 2
@@ -205,22 +203,24 @@ class setup_input_builder(object):
             str(self.service_account_group),
             str(role),
 
-            str(self.catalog_service_provider_host),
-
             str(self.zone_name),
+            str(self.catalog_service_provider_host),
             str(self.zone_port),
             str(self.parallel_port_range_begin),
             str(self.parallel_port_range_end),
             str(self.control_plane_port),
             str(self.schema_validation_base_uri),
             str(self.admin_username),
+            'y', # confirmation of inputs
 
             str(self.zone_key),
             str(self.negotiation_key),
             str(self.control_plane_key),
             str(self.admin_password),
+            '', #confirmation of inputs
 
-            str(self.vault_directory)
+            str(self.vault_directory),
+            '' # confirmation of inputs
         ])
 
     def build_input_for_catalog_provider(self):
@@ -286,14 +286,45 @@ def setup_irods_catalog_provider(docker_client, project_name, service_instance=1
     csp_container_name = context.irods_catalog_provider_container(project_name, service_instance)
     csp_container = docker_client.containers.get(csp_container_name)
 
-    execute.execute_command(csp_container, 'bash -c \'echo "{}" > /provider.input\''.format(setup_input))
+    ec = execute.execute_command(csp_container, 'bash -c \'echo "{}" > /provider.input\''.format(setup_input))
+    if ec is not 0:
+        logging.error('failed to create setup script input file [{}]'.format(csp_container_name))
+        return ec
+
     execute.execute_command(csp_container, 'cat /provider.input')
 
     path_to_setup_script = os.path.join('/var', 'lib', 'irods', 'scripts', 'setup_irods.py')
-    #cmd = 'echo "{0}" | python {1}'.format(setup_input, path_to_setup_script)
     cmd = 'bash -c \'python {0} < /provider.input\''.format(path_to_setup_script)
 
     return execute.execute_command(csp_container, cmd)
+
+def setup_irods_catalog_consumer(docker_client, project_name, service_instance=1):
+    logging.debug('setting up iRODS catalog consumer [{}]'.format(project_name))
+
+    csp_container_name = context.irods_catalog_provider_container(project_name, service_instance)
+    csp_container = docker_client.containers.get(csp_container_name)
+
+    setup_input = (setup_input_builder()
+                    .service_account(catalog_service_role='consumer')
+                    .server_options(catalog_service_provider_host=context.container_hostname(csp_container))
+                    .build())
+
+    logging.debug('input to setup script [{}]'.format(setup_input))
+
+    csc_container_name = context.irods_catalog_consumer_container(project_name, service_instance)
+    csc_container = docker_client.containers.get(csc_container_name)
+
+    ec = execute.execute_command(csc_container, 'bash -c \'echo "{}" > /consumer.input\''.format(setup_input))
+    if ec is not 0:
+        logging.error('failed to create setup script input file [{}]'.format(csc_container_name))
+        return ec
+
+    execute.execute_command(csc_container, 'cat /consumer.input')
+
+    path_to_setup_script = os.path.join('/var', 'lib', 'irods', 'scripts', 'setup_irods.py')
+    cmd = 'bash -c \'python {0} < /consumer.input\''.format(path_to_setup_script)
+
+    return execute.execute_command(csc_container, cmd)
 
 if __name__ == "__main__":
     import argparse
@@ -308,12 +339,20 @@ if __name__ == "__main__":
                         help='The tag of the database container to use (e.g. postgres:10.12')
     parser.add_argument('--exclude-catalog-setup', dest='setup_catalog', action='store_false',
                         help='If indicated, skips the setup of iRODS tables and postgres user in the database.')
+    parser.add_argument('--exclude-irods-catalog-provider-setup', dest='setup_irods_catalog_provider', action='store_false',
+                        help='If indicated, skips running the iRODS setup script on the catalog service provider.')
+    parser.add_argument('--irods-catalog-consumer-count', '-n', dest='irods_catalog_consumer_count', type=int, default=1,
+                        help='Indicates how many catalog service consumer instances must be set up.')
     parser.add_argument('--verbose', '-v', dest='verbosity', action='count', default=1,
                         help='Increase the level of output to stdout. CRITICAL and ERROR messages will always be printed.')
 
     args = parser.parse_args()
 
     logs.configure(args.verbosity)
+
+    if args.irods_catalog_consumer_count < 1:
+        print('invalid input for --irods-catalog-consumer-count [{}]'.format(args.irods_catalog_consumer_count))
+        exit(1)
 
     docker_client = docker.from_env()
 
@@ -323,7 +362,12 @@ if __name__ == "__main__":
         if args.setup_catalog:
             setup_catalog(docker_client, p.name, args.database)
 
-        setup_irods_catalog_provider(docker_client, p.name)
+        if args.setup_irods_catalog_provider:
+            setup_irods_catalog_provider(docker_client, p.name)
+
+        for i in range(args.irods_catalog_consumer_count):
+            # range() is 0-based, so add 1 to match the service instance numbering scheme of docker-compose
+            setup_irods_catalog_consumer(docker_client, p.name, service_instance=i + 1)
 
     except Exception as e:
         logging.critical(e)
