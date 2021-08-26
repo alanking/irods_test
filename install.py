@@ -112,7 +112,7 @@ def install_irods_packages(docker_client, platform_name, database_name, package_
 
         cmd = ' '.join([platform_upgrade_command(platform_name), package_list])
 
-        logging.debug('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
+        logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
 
         ec = execute.execute_command(container, cmd)
 

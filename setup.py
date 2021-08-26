@@ -72,7 +72,7 @@ def setup_catalog(docker_client,
                   database_name='ICAT',
                   database_user='irods',
                   database_password='testpassword'):
-    logging.debug('setting up catalog [{}]'.format(project_name))
+    logging.warning('setting up catalog [{}]'.format(project_name))
 
     container_name = context.irods_catalog_database_container(project_name, service_instance)
 
@@ -270,10 +270,27 @@ class setup_input_builder(object):
         except KeyError:
             raise NotImplementedError('unsupported catalog service role [{}]'.format(self.catalog_service_role))
 
-def setup_irods_catalog_provider(docker_client, project_name, service_instance=1):
-    logging.debug('setting up iRODS catalog provider [{}]'.format(project_name))
 
-    db_container_name = context.irods_catalog_database_container(project_name, service_instance)
+def setup_irods_server(container, setup_input):
+    ec = execute.execute_command(container, 'bash -c \'echo "{}" > /input\''.format(setup_input))
+    if ec is not 0:
+        raise RuntimeError('failed to create setup script input file [{}]'.format(container.name))
+
+    execute.execute_command(container, 'cat /input')
+
+    path_to_setup_script = os.path.join('/var', 'lib', 'irods', 'scripts', 'setup_irods.py')
+    run_setup_script = 'bash -c \'python {0} < /input\''.format(path_to_setup_script)
+    ec = execute.execute_command(container, run_setup_script)
+    if ec is not 0:
+        raise RuntimeError('failed to set up iRODS catalog service provider [{}]'.format(container.name))
+
+    ec = execute.execute_command(container, '/var/lib/irods/irodsctl -v start', user='irods')
+    if ec is not 0:
+        raise RuntimeError('failed to start iRODS server after setup [{}]'.format(container.name))
+
+
+def setup_irods_catalog_provider(docker_client, project_name, database_service_instance=1, provider_service_instance=1):
+    db_container_name = context.irods_catalog_database_container(project_name, provider_service_instance)
     db_container = docker_client.containers.get(db_container_name)
 
     setup_input = (setup_input_builder()
@@ -283,25 +300,16 @@ def setup_irods_catalog_provider(docker_client, project_name, service_instance=1
 
     logging.debug('input to setup script [{}]'.format(setup_input))
 
-    csp_container_name = context.irods_catalog_provider_container(project_name, service_instance)
+    csp_container_name = context.irods_catalog_provider_container(project_name, provider_service_instance)
     csp_container = docker_client.containers.get(csp_container_name)
 
-    ec = execute.execute_command(csp_container, 'bash -c \'echo "{}" > /provider.input\''.format(setup_input))
-    if ec is not 0:
-        logging.error('failed to create setup script input file [{}]'.format(csp_container_name))
-        return ec
+    logging.warning('setting up iRODS catalog provider [{}]'.format(csp_container_name))
 
-    execute.execute_command(csp_container, 'cat /provider.input')
+    setup_irods_server(csp_container, setup_input)
 
-    path_to_setup_script = os.path.join('/var', 'lib', 'irods', 'scripts', 'setup_irods.py')
-    cmd = 'bash -c \'python {0} < /provider.input\''.format(path_to_setup_script)
 
-    return execute.execute_command(csp_container, cmd)
-
-def setup_irods_catalog_consumer(docker_client, project_name, service_instance=1):
-    logging.debug('setting up iRODS catalog consumer [{}]'.format(project_name))
-
-    csp_container_name = context.irods_catalog_provider_container(project_name, service_instance)
+def setup_irods_catalog_consumer(docker_client, project_name, provider_service_instance=1, consumer_service_instance=1):
+    csp_container_name = context.irods_catalog_provider_container(project_name, provider_service_instance)
     csp_container = docker_client.containers.get(csp_container_name)
 
     setup_input = (setup_input_builder()
@@ -311,20 +319,13 @@ def setup_irods_catalog_consumer(docker_client, project_name, service_instance=1
 
     logging.debug('input to setup script [{}]'.format(setup_input))
 
-    csc_container_name = context.irods_catalog_consumer_container(project_name, service_instance)
+    csc_container_name = context.irods_catalog_consumer_container(project_name, consumer_service_instance)
     csc_container = docker_client.containers.get(csc_container_name)
 
-    ec = execute.execute_command(csc_container, 'bash -c \'echo "{}" > /consumer.input\''.format(setup_input))
-    if ec is not 0:
-        logging.error('failed to create setup script input file [{}]'.format(csc_container_name))
-        return ec
+    logging.warning('setting up iRODS catalog consumer [{}]'.format(csc_container_name))
 
-    execute.execute_command(csc_container, 'cat /consumer.input')
+    setup_irods_server(csc_container, setup_input)
 
-    path_to_setup_script = os.path.join('/var', 'lib', 'irods', 'scripts', 'setup_irods.py')
-    cmd = 'bash -c \'python {0} < /consumer.input\''.format(path_to_setup_script)
-
-    return execute.execute_command(csc_container, cmd)
 
 if __name__ == "__main__":
     import argparse
@@ -365,9 +366,10 @@ if __name__ == "__main__":
         if args.setup_irods_catalog_provider:
             setup_irods_catalog_provider(docker_client, p.name)
 
+        # TODO: parallel!
         for i in range(args.irods_catalog_consumer_count):
             # range() is 0-based, so add 1 to match the service instance numbering scheme of docker-compose
-            setup_irods_catalog_consumer(docker_client, p.name, service_instance=i + 1)
+            setup_irods_catalog_consumer(docker_client, p.name, consumer_service_instance=i + 1)
 
     except Exception as e:
         logging.critical(e)
