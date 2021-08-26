@@ -130,7 +130,7 @@ def install_irods_packages(docker_client, platform_name, database_name, package_
     tarfile_path = create_tarfile(packages)
 
     rc = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(containers)) as executor:
+    with concurrent.futures.ThreadPoolExecutor() as executor:
         futures_to_containers = {executor.submit(install_package_on_container, docker_client, c, packages, tarfile_path, platform_name): c for c in containers}
         logging.debug(futures_to_containers)
 

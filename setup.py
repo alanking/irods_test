@@ -282,7 +282,7 @@ def setup_irods_server(container, setup_input):
     run_setup_script = 'bash -c \'python {0} < /input\''.format(path_to_setup_script)
     ec = execute.execute_command(container, run_setup_script)
     if ec is not 0:
-        raise RuntimeError('failed to set up iRODS catalog service provider [{}]'.format(container.name))
+        raise RuntimeError('failed to set up iRODS server [{}]'.format(container.name))
 
     ec = execute.execute_command(container, '/var/lib/irods/irodsctl -v start', user='irods')
     if ec is not 0:
@@ -329,6 +329,7 @@ def setup_irods_catalog_consumer(docker_client, project_name, provider_service_i
 
 if __name__ == "__main__":
     import argparse
+    import concurrent.futures
     import logs
 
     parser = argparse.ArgumentParser(description='Install a list of packages on a docker-compose project.')
@@ -366,10 +367,25 @@ if __name__ == "__main__":
         if args.setup_irods_catalog_provider:
             setup_irods_catalog_provider(docker_client, p.name)
 
-        # TODO: parallel!
-        for i in range(args.irods_catalog_consumer_count):
+        rc = 0
+        with concurrent.futures.ThreadPoolExecutor() as executor:
             # range() is 0-based, so add 1 to match the service instance numbering scheme of docker-compose
-            setup_irods_catalog_consumer(docker_client, p.name, consumer_service_instance=i + 1)
+            futures_to_containers = {executor.submit(setup_irods_catalog_consumer, docker_client, p.name, 1, (i + 1)): i for i in range(args.irods_catalog_consumer_count)}
+            logging.debug(futures_to_containers)
+
+            for f in concurrent.futures.as_completed(futures_to_containers):
+                instance = futures_to_containers[f]
+                container_name = context.irods_catalog_consumer_container(p.name, instance + 1)
+                try:
+                    f.result()
+                    logging.info('setup completed successfully [{}]'.format(container_name))
+
+                except Exception as e:
+                    logging.error('exception raised while setting up iRODS [{}]'.format(container_name))
+                    logging.error(e)
+                    rc = 1
+
+        exit(rc)
 
     except Exception as e:
         logging.critical(e)
