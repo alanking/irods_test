@@ -11,7 +11,6 @@ import execute
 class database_setup_strategy(object):
     def __init__(self, container):
         self.container = container
-        self.port = port
 
     def execute_psql_command(self, psql_cmd):
         raise NotImplementedError('method not implemented for database strategy')
