@@ -87,8 +87,39 @@ def is_package_database_plugin(p):
 def irodsctl(container, cmd):
     execute.execute_command(container, '/var/lib/irods/irodsctl ' + cmd, user='irods')
 
+def install_package_on_container(docker_client, docker_compose_container, packages_list, packages_tarfile_path, platform_name):
+    # Only the iRODS containers need to have packages installed
+    if context.is_catalog_database_container(docker_compose_container):
+        return 0
+
+    container = docker_client.containers.get(docker_compose_container.name)
+
+    #irodsctl(container, 'stop')
+
+    path_to_packages_in_container = put_packages_in_container(container, packages_tarfile_path)
+
+    package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
+
+    cmd = ' '.join([platform_upgrade_command(platform_name), package_list])
+
+    logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
+
+    ec = execute.execute_command(container, cmd)
+
+    if ec is not 0:
+        logging.error(
+            'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, c.name))
+
+        return ec
+
+    #irodsctl(container, 'restart')
+
+    return 0
+
 # TODO: Want to make a more generic version of this
 def install_irods_packages(docker_client, platform_name, database_name, package_directory, containers):
+    import concurrent.futures
+
     package_name_list = ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(database_name)]
 
     packages = get_list_of_package_paths(platform_name, package_directory, package_name_list)
@@ -98,31 +129,28 @@ def install_irods_packages(docker_client, platform_name, database_name, package_
     # TODO: output directory should contain the tarfile of packages for archaeological purposes
     tarfile_path = create_tarfile(packages)
 
-    for c in containers:
-        # Only the iRODS containers need to have packages installed
-        if context.is_catalog_database_container(c): continue
+    rc = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(containers)) as executor:
+        futures_to_containers = {executor.submit(install_package_on_container, docker_client, c, packages, tarfile_path, platform_name): c for c in containers}
+        logging.debug(futures_to_containers)
 
-        container = docker_client.containers.get(c.name)
+        for f in concurrent.futures.as_completed(futures_to_containers):
+            container = futures_to_containers[f]
+            try:
+                ec = f.result()
+                if ec is not 0:
+                    logging.error('error while installing packages on container [{}]'.format(container.name))
+                    rc = ec
 
-        irodsctl(container, 'stop')
+                logging.info('packages installed successfully [{}]'.format(container.name))
 
-        path_to_packages_in_container = put_packages_in_container(container, tarfile_path)
+            except Exception as e:
+                logging.error('exception raised while installing packages [{}]'.format(container.name))
+                logging.error(e)
+                rc = 1
 
-        package_list = ' '.join([p for p in packages if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
+    return rc
 
-        cmd = ' '.join([platform_upgrade_command(platform_name), package_list])
-
-        logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
-
-        ec = execute.execute_command(container, cmd)
-
-        if ec is not 0:
-            logging.error(
-                'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, c.name))
-
-            return ec
-
-        irodsctl(container, 'restart')
 
 if __name__ == "__main__":
     import argparse
