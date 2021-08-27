@@ -116,6 +116,7 @@ def install_package_on_container(docker_client, docker_compose_container, packag
 
     return 0
 
+
 # TODO: Want to make a more generic version of this
 def install_irods_packages(docker_client, platform_name, database_name, package_directory, containers):
     import concurrent.futures
@@ -152,6 +153,65 @@ def install_irods_packages(docker_client, platform_name, database_name, package_
     return rc
 
 
+def install_package_on_container_from_official_repository(docker_client, docker_compose_container, packages_list, platform_name):
+    # Only the iRODS containers need to have packages installed
+    if context.is_catalog_database_container(docker_compose_container):
+        return 0
+
+    container = docker_client.containers.get(docker_compose_container.name)
+
+    #irodsctl(container, 'stop')
+
+    package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
+
+    cmd = ' '.join([platform_upgrade_command(platform_name), package_list])
+
+    logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
+
+    ec = execute.execute_command(container, cmd)
+
+    if ec is not 0:
+        logging.error(
+            'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, c.name))
+
+        return ec
+
+    #irodsctl(container, 'restart')
+
+    return 0
+
+def install_irods_packages_from_official_repository(docker_client, platform_name, database_name, version, containers):
+    import concurrent.futures
+
+    package_name_list = ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(database_name)]
+
+    packages = ['{0}={1}'.format(p, version) for p in package_name_list]
+
+    logging.info('packages to install [{}]'.format(packages))
+
+    rc = 0
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures_to_containers = {executor.submit(install_package_on_container_from_official_repository, docker_client, c, packages, platform_name): c for c in containers}
+        logging.debug(futures_to_containers)
+
+        for f in concurrent.futures.as_completed(futures_to_containers):
+            container = futures_to_containers[f]
+            try:
+                ec = f.result()
+                if ec is not 0:
+                    logging.error('error while installing packages on container [{}]'.format(container.name))
+                    rc = ec
+
+                logging.info('packages installed successfully [{}]'.format(container.name))
+
+            except Exception as e:
+                logging.error('exception raised while installing packages [{}]'.format(container.name))
+                logging.error(e)
+                rc = 1
+
+    return rc
+
+
 if __name__ == "__main__":
     import argparse
     import logs
@@ -159,8 +219,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Install iRODS packages from a local directory to a docker-compose project.')
     parser.add_argument('project_path', metavar='PROJECT_PATH', type=str,
                         help='Path to the docker-compose project on which packages will be installed.')
-    parser.add_argument('package_directory', metavar='PATH_TO_DIRECTORY_WITH_PACKAGES', type=str,
+    parser.add_argument('--package-directory', metavar='PATH_TO_DIRECTORY_WITH_PACKAGES', type=str, dest='package_directory',
                         help='Path to local directory which contains iRODS packages to be installed.')
+    parser.add_argument('--package-version', metavar='PACKAGE_VERSION_TO_DOWNLOAD', type=str, dest='package_version',
+                        help='Version of iRODS to download and install.')
     parser.add_argument('--project-name', metavar='PROJECT_NAME', type=str, dest='project_name',
                         help='Name of the docker-compose project on which to install packages.')
     parser.add_argument('--os-platform-tag', '-p', metavar='OS_PLATFORM_IMAGE_TAG', dest='platform', type=str, default='ubuntu:18.04',
@@ -171,6 +233,14 @@ if __name__ == "__main__":
                         help='Increase the level of output to stdout. CRITICAL and ERROR messages will always be printed.')
 
     args = parser.parse_args()
+
+    if args.package_directory and args.package_version:
+        print('package directory and package version are mutually exclusive')
+        exit(1)
+
+    if not args.package_directory and not args.package_version:
+        print('either package directory or package version must be specified')
+        exit(1)
 
     logs.configure(args.verbosity)
 
@@ -185,13 +255,23 @@ if __name__ == "__main__":
 
     logging.debug('containers on project [{}]'.format([c.name for c in p.containers()]))
 
-    exit(
-        install_irods_packages(
-            docker.from_env(),
-            context.image_name(args.platform),
-            context.image_name(args.database),
-            os.path.abspath(args.package_directory),
-            p.containers()
+    if args.package_directory:
+        exit(
+            install_irods_packages(
+                docker.from_env(),
+                context.image_name(args.platform),
+                context.image_name(args.database),
+                os.path.abspath(args.package_directory),
+                p.containers()
+            )
         )
-    )
-
+    elif args.package_version:
+        exit(
+            install_irods_packages_from_official_repository(
+                docker.from_env(),
+                context.image_name(args.platform),
+                context.image_name(args.database),
+                args.package_version,
+                p.containers()
+            )
+        )
