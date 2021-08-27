@@ -165,7 +165,7 @@ def setup_catalog(docker_client,
 
     container = docker_client.containers.get(container_name)
 
-    strat = database_setup.make_strategy(database_tag, container)
+    strat = make_strategy(database_tag, container)
 
     ec = strat.create_database(database_name)
     if ec is not 0:

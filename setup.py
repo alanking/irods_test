@@ -7,7 +7,6 @@ import os
 # local modules
 import context
 import database_setup
-import execute
 import irods_setup
 
 if __name__ == "__main__":
