@@ -8,7 +8,15 @@ import os
 import context
 import execute
 
-def platform_upgrade_command(platform):
+def platform_update_command(platform):
+    if 'centos' in platform:
+        return '' # ?
+    elif 'ubuntu' in platform:
+        return 'apt update'
+    else:
+        raise RuntimeError('unsupported platform [{}]'.format(platform))
+
+def platform_install_command(platform):
     if 'centos' in platform:
         return 'rpm -U --force'
     elif 'ubuntu' in platform:
@@ -39,7 +47,7 @@ def put_packages_in_container(container, tarfile_path):
 
 
 def install_package(container, platform, full_path_to_package):
-    cmd = ' '.join([platform_upgrade_command(platform), full_path_to_package])
+    cmd = ' '.join([platform_install_command(platform), full_path_to_package])
 
     execute.execute_command(container, cmd)
 
@@ -100,16 +108,19 @@ def install_package_on_container(docker_client, docker_compose_container, packag
 
     package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
 
-    cmd = ' '.join([platform_upgrade_command(platform_name), package_list])
+    cmd = ' '.join([platform_install_command(platform_name), package_list])
 
     logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
 
-    ec = execute.execute_command(container, cmd)
+    ec = execute.execute_command(container, platform_update_command(platform_name))
+    if ec is not 0:
+        logging.error('failed to update local repositories [{}]'.format(container.name))
+        return ec
 
+    ec = execute.execute_command(container, cmd)
     if ec is not 0:
         logging.error(
-            'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, c.name))
-
+            'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, container.name))
         return ec
 
     #irodsctl(container, 'restart')
@@ -142,8 +153,8 @@ def install_irods_packages(docker_client, platform_name, database_name, package_
                 if ec is not 0:
                     logging.error('error while installing packages on container [{}]'.format(container.name))
                     rc = ec
-
-                logging.info('packages installed successfully [{}]'.format(container.name))
+                else:
+                    logging.info('packages installed successfully [{}]'.format(container.name))
 
             except Exception as e:
                 logging.error('exception raised while installing packages [{}]'.format(container.name))
@@ -164,15 +175,19 @@ def install_package_on_container_from_official_repository(docker_client, docker_
 
     package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
 
-    cmd = ' '.join([platform_upgrade_command(platform_name), package_list])
+    cmd = ' '.join([platform_install_command(platform_name), package_list])
 
     logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
 
-    ec = execute.execute_command(container, cmd)
+    ec = execute.execute_command(container, platform_update_command(platform_name))
+    if ec is not 0:
+        logging.error('failed to update local repositories [{}]'.format(container.name))
+        return ec
 
+    ec = execute.execute_command(container, cmd)
     if ec is not 0:
         logging.error(
-            'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, c.name))
+            'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, container.name))
 
         return ec
 
