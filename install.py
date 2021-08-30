@@ -92,17 +92,12 @@ def get_list_of_package_paths(platform_name, package_directory, package_name_lis
 def is_package_database_plugin(p):
     return 'database' in p
 
-def irodsctl(container, cmd):
-    execute.execute_command(container, '/var/lib/irods/irodsctl ' + cmd, user='irods')
-
 def install_package_on_container(docker_client, docker_compose_container, packages_list, packages_tarfile_path, platform_name):
     # Only the iRODS containers need to have packages installed
     if context.is_catalog_database_container(docker_compose_container):
         return 0
 
     container = docker_client.containers.get(docker_compose_container.name)
-
-    #irodsctl(container, 'stop')
 
     path_to_packages_in_container = put_packages_in_container(container, packages_tarfile_path)
 
@@ -122,8 +117,6 @@ def install_package_on_container(docker_client, docker_compose_container, packag
         logging.error(
             'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, container.name))
         return ec
-
-    #irodsctl(container, 'restart')
 
     return 0
 
@@ -171,8 +164,6 @@ def install_package_on_container_from_official_repository(docker_client, docker_
 
     container = docker_client.containers.get(docker_compose_container.name)
 
-    #irodsctl(container, 'stop')
-
     package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
 
     cmd = ' '.join([platform_install_command(platform_name), package_list])
@@ -190,8 +181,6 @@ def install_package_on_container_from_official_repository(docker_client, docker_
             'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, container.name))
 
         return ec
-
-    #irodsctl(container, 'restart')
 
     return 0
 
