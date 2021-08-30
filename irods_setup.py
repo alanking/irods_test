@@ -111,7 +111,8 @@ class setup_input_builder(object):
 
         Arguments:
         zone_name -- name of the iRODS zone
-        catalog_service_provider_host -- hostname for the iRODS catalog service provider
+        catalog_service_provider_host -- hostname for the iRODS catalog service provider (only
+                                         applicable when setting up a catalog service consumer)
         zone_port -- main iRODS port
         parallel_port_range_begin -- beginning of the port range used when transferring large
                                      files
@@ -119,8 +120,7 @@ class setup_input_builder(object):
         control_plane_port -- port used for the control plane
         schema_validation_base_uri -- location of the schema files used to validate the server's
                                       configuration files
-        admin_username -- name of the iRODS administration account that will be created during
-                          setup
+        admin_username -- name of the iRODS administration account
         """
         self.zone_name = zone_name
         self.catalog_service_provider_host = catalog_service_provider_host
@@ -139,6 +139,14 @@ class setup_input_builder(object):
                            negotiation_key = '32_byte_server_negotiation_key__',
                            control_plane_key = '32_byte_server_control_plane_key',
                            admin_password = 'rods'):
+        """Set values for the keys and passwords section of the setup script.
+
+        Arguments:
+        zone_key -- secret key used in server-to-server communication
+        negotiation_key -- secret key used in server-to-server communication
+        control_plane_key -- secret key shared by all servers
+        admin_password -- password for the iRODS administration account
+        """
         self.zone_key = zone_key
         self.negotiation_key = negotiation_key
         self.control_plane_key = control_plane_key
@@ -148,12 +156,23 @@ class setup_input_builder(object):
 
 
     def vault_directory(self, vault_directory=''):
+        """Set value for the vault directory section of the setup script.
+
+        Arguments:
+        vault_directory -- storage location of the default unixfilesystem resource created
+                           during installation
+        """
         self.vault_directory = vault_directory
 
         return self
 
 
     def build_input_for_catalog_consumer(self):
+        """Generate string to use as input for the setup script.
+
+        The script changes depending on the role, so the options used here are specific to
+        setting up an iRODS catalog service consumer.
+        """
         # The setup script defaults catalog service consumer option as 2
         role = 2
         return '\n'.join([
@@ -182,6 +201,11 @@ class setup_input_builder(object):
         ])
 
     def build_input_for_catalog_provider(self):
+        """Generate string to use as input for the setup script.
+
+        The script changes depending on the role, so the options used here are specific to
+        setting up an iRODS catalog service provider.
+        """
         role = ''
         return '\n'.join([
             str(self.service_account_name),
@@ -217,6 +241,12 @@ class setup_input_builder(object):
         ])
 
     def build(self):
+        """Build the string for the setup script input.
+
+        Depending on the way the inputs were provided, either an iRODS catalog service provider
+        or a catalog service consumer will be set up and the resulting input string will be
+        returned.
+        """
         build_for_role = {
             'provider': self.build_input_for_catalog_provider,
             'consumer': self.build_input_for_catalog_consumer
