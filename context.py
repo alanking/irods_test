@@ -47,3 +47,30 @@ def is_catalog_database_container(container):
 def is_catalog_service_provider_container(container):
     return service_name(container.name) == irods_catalog_provider_service()
 
+def platform_image_tag(project_name, delimiter='-'):
+    """Derive and return OS platform image tag from structured docker-compose project name.
+
+    Arguments:
+    project_name -- a project name which contains the OS platform name and version as its
+                    next-to-last two elements in a `delimiter`-delimited string (e.g.
+                    my-project-platform-platformversion-postgres-10.12) NOTE: The platform name
+                    and version are expected to match the docker image name and tag combination
+                    such that they can be concatenated in a colon-delimited fashion and match
+                    an existing docker image tag (e.g. platform:platformversion).
+    delimiter -- optional parameter which changes the delimiter for the string to parse
+    """
+    return ':'.join(project_name.split(delimiter)[-4:-2])
+
+def database_image_tag(project_name, delimiter='-'):
+    """Derive and return database image tag from structured docker-compose project name.
+
+    Arguments:
+    project_name -- a project name which contains the database name and version as its final
+                    two elements in a `delimiter`-delimited string (e.g.
+                    my-project-ubuntu-18.04-database-databaseversion). NOTE: The database name
+                    and version are expected to match the docker image name and tag combination
+                    such that they can be concatenated in a colon-delimited fashion and match
+                    an existing docker image tag (e.g. database:databaseversion).
+    delimiter -- optional parameter which changes the delimiter for the string to parse
+    """
+    return ':'.join(project_name.split(delimiter)[-2:])
