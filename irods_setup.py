@@ -110,14 +110,17 @@ class setup_input_builder(object):
         Returns this instance of the class.
 
         Arguments:
-        zone_name -- 
-        catalog_service_provider_host -- 
-        zone_port -- 
-        parallel_port_range_begin -- 
-        parallel_port_range_end -- 
-        control_plane_port -- 
-        schema_validation_base_uri -- 
-        admin_username -- 
+        zone_name -- name of the iRODS zone
+        catalog_service_provider_host -- hostname for the iRODS catalog service provider
+        zone_port -- main iRODS port
+        parallel_port_range_begin -- beginning of the port range used when transferring large
+                                     files
+        parallel_port_range_end -- end of the port range used when transferring large files
+        control_plane_port -- port used for the control plane
+        schema_validation_base_uri -- location of the schema files used to validate the server's
+                                      configuration files
+        admin_username -- name of the iRODS administration account that will be created during
+                          setup
         """
         self.zone_name = zone_name
         self.catalog_service_provider_host = catalog_service_provider_host
@@ -242,6 +245,7 @@ def setup_irods_server(container, setup_input):
     ec = execute.execute_command(container, '/var/lib/irods/irodsctl -v restart', user='irods')
     if ec is not 0:
         logging.error('failed to start iRODS server after setup [{}]'.format(container.name))
+
 
 def setup_irods_catalog_provider(docker_client, project_name, database_service_instance=1, provider_service_instance=1):
     db_container_name = context.irods_catalog_database_container(project_name, provider_service_instance)
