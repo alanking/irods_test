@@ -1,66 +1,52 @@
 # grown-up modules
 import compose.cli.command
 import docker
-import os
 import logging
+import os
 
 # local modules
 import context
-import install
+import database_setup
 import execute
+import install
+import irods_setup
 
-# TODO: Way to know the absolute path of the thing that is actually running (this script)
-#script_path = os.path.dirname(os.path.realpath(__file__))
+def job_name(project_name, prefix=None):
+    """Construct unique job name based on the docker-compose project name.
 
-class execution_context:
-    def __init__(self, args):
-        self.platform_name, self.platform_version = context.image_name_and_version(args.platform)
-        self.database_name, self.database_version = context.image_name_and_version(args.database)
+    The job name returned will be of the form: `project_name`_`prefix`_`uuid.uuid4()`
 
-        self.project_name = '-'.join([self.platform_name,
-                                      self.platform_version,
-                                      self.database_name,
-                                      self.database_version])
+    If no `prefix` is provided, the job name will be of the form: `project_name`_`uuid.uuid4()`
 
-        if args.job_name:
-            self.job_name = '_'.join([args.job_name, self.project_name])
-        else:
-            import uuid
-            # TODO: use timestamps, also
-            self.job_name = '_'.join([str(uuid.uuid4()), self.project_name])
+    Arguments:
+    project_name -- docker-compose project name which identifies the type of test being run
+    prefix -- optional prefix for the job name
+    """
+    import uuid
+    # TODO: use timestamps, also
+    if prefix:
+        return '_'.join([prefix, project_name, str(uuid.uuid4())])
 
-        if args.output_directory:
-            self.output_directory = os.path.join(os.path.abspath(args.output_directory), self.job_name)
-        else:
-            import tempfile
-            self.output_directory = os.path.join(tempfile.mkdtemp(prefix=self.project_name), self.job_name)
+    return '_'.join([project_name, str(uuid.uuid4())])
 
-def wait_for_setup_to_finish(c, timeout_in_seconds):
-    import time
 
-    FLAG_FILE = '/var/lib/irods/setup_complete'
+def make_output_directory(dirname, basename):
+    """Create a directory for job output and return its full path.
 
-    logging.info('waiting for iRODS to finish setting up [{}]'.format(c.name))
+    Arguments:
+    dirname -- base directory in which the unique subdirectory for output will be created
+    basename -- unique subdirectory which will be created under the provided dirname
+    """
+    p = os.path.join(os.path.abspath(dirname), basename)
 
-    start_time = time.time()
-    now = start_time
-
-    while now - start_time < timeout_in_seconds:
-        if execute.execute_command(c, 'stat {}'.format(FLAG_FILE)) == 0:
-            logging.info('iRODS has been set up (waited [{}] seconds)'.format(str(now - start_time)))
-            return
-
-        time.sleep(1)
-        now = time.time()
-
-    raise RuntimeError('timed out while waiting for iRODS to finish setting up')
-
-def mkdir_p(path):
     try:
-        os.makedirs(path)
+        os.makedirs(p)
     except OSError as e:
-        if e.errno != errno.EEXIST or not os.path.isdir(path):
+        if e.errno != errno.EEXIST or not os.path.isdir(p):
             raise
+
+    return p
+
 
 def configure_irods_testing(docker_client, containers):
     # Make sure univMSS interface is configured for testing
@@ -90,66 +76,111 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run iRODS tests in a consistent environment.')
     parser.add_argument('commands', metavar='COMMANDS', nargs='+',
                         help='Space-delimited list of commands to be run')
-    parser.add_argument('--run-on-container', '-t', metavar='TARGET_CONTAINER', dest='run_on', type=str, default='irods-catalog-provider',
-                        help='The name of the container on which the command will run')
-    parser.add_argument('--irods-setup-wait-time', '-w', metavar='SETUP_TIMEOUT_IN_SECONDS', dest='setup_timeout', type=int, default=30,
-                        help='How many seconds to wait before timing out while waiting on iRODS server to be set up.')
+    parser.add_argument('--project-directory', metavar='PATH_TO_PROJECT_DIRECTORY', type=str, dest='project_directory', default='.',
+                        help='Path to the docker-compose project on which packages will be installed.')
+    parser.add_argument('--project-name', metavar='PROJECT_NAME', type=str, dest='project_name',
+                        help='Name of the docker-compose project on which to install packages.')
+    parser.add_argument('--run-on-service-instance', '-t', metavar='TARGET_SERVICE_INSTANCE', dest='run_on', type=str, nargs=2, default='irods-catalog-provider 1',
+                        help='The service instance on which the command will run represented as "SERVICE_NAME SERVICE_INSTANCE_NUM".')
     parser.add_argument('--output-directory', '-o', metavar='FULLPATH_TO_DIRECTORY_FOR_OUTPUT', dest='output_directory', type=str,
                         help='Full path to local directory for output from execution.')
-    parser.add_argument('--os-platform-tag', '-p', metavar='OS_PLATFORM_IMAGE_TAG', dest='platform', type=str, default='ubuntu:18.04',
-                        help='The tag of the base Docker image to use (e.g. centos:7)')
-    parser.add_argument('--database-tag', '-d', metavar='DATABASE_IMAGE_TAG', dest='database', type=str, default='postgres:10.12',
-                        help='The tag of the database container to use (e.g. postgres:10.12')
+    parser.add_argument('--os-platform-tag', '-p', metavar='OS_PLATFORM_IMAGE_TAG', dest='platform', type=str,
+                        help='The tag of the base Docker image to use')
+    parser.add_argument('--database-tag', '-d', metavar='DATABASE_IMAGE_TAG', dest='database', type=str,
+                        help='The tag of the database container to use')
     parser.add_argument('--job-name', '-j', metavar='JOB_NAME', dest='job_name', type=str,
                         help='Name of the test run')
-    parser.add_argument('--install-packages-from', '-i', metavar='PATH_TO_DIRECTORY_WITH_PACKAGES', dest='package_directory', type=str,
-                        help='Full path to local directory which contains packages to be installed on iRODS containers.')
+    parser.add_argument('--package-directory', metavar='PATH_TO_DIRECTORY_WITH_PACKAGES', type=str, dest='package_directory',
+                        help='Path to local directory which contains iRODS packages to be installed')
+    parser.add_argument('--package-version', metavar='PACKAGE_VERSION_TO_DOWNLOAD', type=str, dest='package_version',
+                        help='Version of iRODS to download and install')
     parser.add_argument('--verbose', '-v', dest='verbosity', action='count', default=1,
                         help='Increase the level of output to stdout. CRITICAL and ERROR messages will always be printed.')
 
     args = parser.parse_args()
 
-    docker_client = docker.from_env()
-    ctx = execution_context(args)
+    if args.package_directory and args.package_version:
+        print('package directory and package version are mutually exclusive')
+        exit(1)
 
-    mkdir_p(ctx.output_directory)
+    # Get the context for the Compose file
+    project_directory = os.path.abspath(args.project_directory)
+    p = compose.cli.command.get_project(project_directory, project_name=args.project_name)
 
-    logs.configure(args.verbosity, os.path.join(ctx.output_directory, 'script_output.log'))
+    job_name = job_name(p.name, args.job_name)
 
-    path_to_project = os.path.join(os.path.abspath('projects'), ctx.project_name)
+    if args.output_directory:
+        dirname = args.output_directory
+    else:
+        import tempfile
+        dirname = tempfile.mkdtemp(prefix=args.project_name)
 
-    logging.debug('found project [{}]'.format(path_to_project))
+    output_directory = make_output_directory(dirname, job_name)
+
+    logs.configure(args.verbosity, os.path.join(output_directory, 'script_output.log'))
+
+    # Derive the platform image tag if it is not provided
+    if args.platform:
+        platform = args.platform
+        logging.debug('provided platform image tag [{}]'.format(platform))
+    else:
+        project_name = args.project_name if args.project_name else p.name
+        platform = context.platform_image_tag(project_name)
+        logging.debug('derived platform image tag [{}]'.format(platform))
+
+    # Derive the database image tag if it is not provided
+    if args.database:
+        database = args.database
+        logging.debug('provided database image tag [{}]'.format(database))
+    else:
+        project_name = args.project_name if args.project_name else p.name
+        database = context.database_image_tag(project_name)
+        logging.debug('derived database image tag [{}]'.format(database))
 
     ec = 0
     containers = list()
+    docker_client = docker.from_env()
 
     try:
-        # TODO: project_name parameter causes image explosion - can this be avoided?
-        #p = compose.cli.command.get_project(path_to_project, project_name=ctx.job_name)
-        # Get the context for the Compose file
-        p = compose.cli.command.get_project(path_to_project)
-
         # Bring up the services
         logging.debug('bringing up project [{}]'.format(p.name))
-        containers = p.up()
+        consumer_count = 3
+        containers = p.up(scale_override={context.irods_catalog_consumer_service(): consumer_count})
 
-        # Ensure that iRODS setup has completed on every machine in the topology
-        logging.info('waiting for iRODS to finish setting up')
-        for c in containers:
-            if context.is_catalog_database_container(c): continue
-
-            container = docker_client.containers.get(c.name)
-            wait_for_setup_to_finish(container, args.setup_timeout)
-
-        # Install the custom packages on all the iRODS containers, if specified.
+        # Install iRODS packages
         if args.package_directory:
-            logging.warning('Installing packages from directory [{}]'.format(args.package_directory))
-            install.install_irods_packages(docker_client, ctx.platform_name, ctx.database_name, args.package_directory, containers)
+            logging.warning('installing iRODS packages from directory [{}]'
+                            .format(args.package_directory))
 
+            install.install_local_irods_packages(docker_client,
+                                                 context.image_name(platform),
+                                                 context.image_name(database),
+                                                 args.package_directory,
+                                                 containers)
+        else:
+            # Even if no version was provided, we default to using the latest official release
+            logging.warning('installing official iRODS packages [{}] (empty == latest release)'
+                            .format(args.package_version))
+
+            install.install_official_irods_packages(docker_client,
+                                                    context.image_name(platform),
+                                                    context.image_name(database),
+                                                    args.package_version,
+                                                    containers)
+
+        database_setup.setup_catalog(docker_client, p.name, database)
+
+        irods_setup.setup_irods_catalog_provider(docker_client, p.name)
+
+        irods_setup.setup_irods_catalog_consumers(docker_client, p)
+
+        # Configure the containers for running iRODS automated tests
+        logging.info('configuring iRODS containers for testing')
         configure_irods_testing(docker_client, containers)
 
         # Get the container on which the command is to be executed
-        container = docker_client.containers.get(context.container_name(p.name, args.run_on))
+        target_service_name, target_service_instance = args.run_on
+        container = docker_client.containers.get(context.container_name(p.name, target_service_name, target_service_instance))
         logging.debug('got container to run on [{}]'.format(container.name))
 
         # Serially execute the list of commands provided in the input
@@ -163,8 +194,8 @@ if __name__ == "__main__":
         raise
 
     finally:
-        logging.warning('collecting logs [{}]'.format(ctx.output_directory))
-        logs.collect_logs(docker_client, containers, ctx.output_directory)
+        logging.warning('collecting logs [{}]'.format(output_directory))
+        logs.collect_logs(docker_client, containers, output_directory)
 
         p.down(include_volumes = True, remove_image_type = False)
 

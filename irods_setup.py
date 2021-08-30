@@ -286,9 +286,10 @@ def setup_irods_server(container, setup_input):
     if ec is not 0:
         raise RuntimeError('failed to set up iRODS server [{}]'.format(container.name))
 
-    ec = execute.execute_command(container, '/var/lib/irods/irodsctl -v restart', user='irods')
+    ec = execute.execute_command(container, '/var/lib/irods/irodsctl restart', user='irods')
     if ec is not 0:
-        logging.error('failed to start iRODS server after setup [{}]'.format(container.name))
+        logging.warning('failed to start iRODS server after setup [{}]'.format(container.name))
+        #raise RuntimeError('failed to start iRODS server after setup [{}]'.format(container.name))
 
 
 def setup_irods_catalog_provider(docker_client, project_name, database_service_instance=1, provider_service_instance=1):
@@ -348,3 +349,42 @@ def setup_irods_catalog_consumer(docker_client, project_name, provider_service_i
 
     setup_irods_server(csc_container, setup_input)
 
+def setup_irods_catalog_consumers(docker_client, project, irods_catalog_provider_service_instance=1):
+    """Set up all iRODS catalog service consumers in a docker-compose project in parallel.
+
+    Arguments:
+    docker_client -- docker client for interacting with the docker-compose project
+    project -- compose.project.Project which manages a docker-compose project
+    provider_service_instance -- the service instance for the iRODS catalog service provider
+                                 running in this docker-compose project
+    """
+    import concurrent.futures
+    rc = 0
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures_to_containers = {
+            executor.submit(
+                setup_irods_catalog_consumer,
+                docker_client,
+                project.name,
+                irods_catalog_provider_service_instance,
+                (i + 1) # add 1 to match docker-compose's service instance numbering scheme
+            ): i for i in range(len(context.irods_catalog_consumer_containers(project.containers())))
+        }
+
+        logging.debug(futures_to_containers)
+
+        for f in concurrent.futures.as_completed(futures_to_containers):
+            instance = futures_to_containers[f]
+            container_name = context.irods_catalog_consumer_container(project.name, instance + 1)
+            try:
+                f.result()
+                logging.debug('setup completed successfully [{}]'.format(container_name))
+
+            except Exception as e:
+                logging.error('exception raised while setting up iRODS [{}]'.format(container_name))
+                logging.error(e)
+                rc = 1
+
+    if rc is not 0:
+        raise RuntimeError('failed to set up one or more catalog service consumers, ec=[{}]'.format(rc))

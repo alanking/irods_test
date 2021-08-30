@@ -92,37 +92,37 @@ def get_list_of_package_paths(platform_name, package_directory, package_name_lis
 def is_package_database_plugin(p):
     return 'database' in p
 
-def install_package_on_container(docker_client, docker_compose_container, packages_list, packages_tarfile_path, platform_name):
-    # Only the iRODS containers need to have packages installed
-    if context.is_catalog_database_container(docker_compose_container):
-        return 0
-
-    container = docker_client.containers.get(docker_compose_container.name)
-
-    path_to_packages_in_container = put_packages_in_container(container, packages_tarfile_path)
-
-    package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
-
-    cmd = ' '.join([platform_install_command(platform_name), package_list])
-
-    logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
-
-    ec = execute.execute_command(container, platform_update_command(platform_name))
-    if ec is not 0:
-        logging.error('failed to update local repositories [{}]'.format(container.name))
-        return ec
-
-    ec = execute.execute_command(container, cmd)
-    if ec is not 0:
-        logging.error(
-            'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, container.name))
-        return ec
-
-    return 0
-
 
 # TODO: Want to make a more generic version of this
-def install_irods_packages(docker_client, platform_name, database_name, package_directory, containers):
+def install_local_irods_packages(docker_client, platform_name, database_name, package_directory, containers):
+    def install_packages(docker_client, docker_compose_container, packages_list, packages_tarfile_path, platform_name):
+        # Only the iRODS containers need to have packages installed
+        if context.is_catalog_database_container(docker_compose_container):
+            return 0
+
+        container = docker_client.containers.get(docker_compose_container.name)
+
+        path_to_packages_in_container = put_packages_in_container(container, packages_tarfile_path)
+
+        package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_irods_catalog_provider_container(container)])
+
+        cmd = ' '.join([platform_install_command(platform_name), package_list])
+
+        logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
+
+        ec = execute.execute_command(container, platform_update_command(platform_name))
+        if ec is not 0:
+            logging.error('failed to update local repositories [{}]'.format(container.name))
+            return ec
+
+        ec = execute.execute_command(container, cmd)
+        if ec is not 0:
+            logging.error(
+                'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, container.name))
+            return ec
+
+        return 0
+
     import concurrent.futures
 
     package_name_list = ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(database_name)]
@@ -136,7 +136,7 @@ def install_irods_packages(docker_client, platform_name, database_name, package_
 
     rc = 0
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures_to_containers = {executor.submit(install_package_on_container, docker_client, c, packages, tarfile_path, platform_name): c for c in containers}
+        futures_to_containers = {executor.submit(install_packages, docker_client, c, packages, tarfile_path, platform_name): c for c in containers}
         logging.debug(futures_to_containers)
 
         for f in concurrent.futures.as_completed(futures_to_containers):
@@ -157,34 +157,34 @@ def install_irods_packages(docker_client, platform_name, database_name, package_
     return rc
 
 
-def install_package_on_container_from_official_repository(docker_client, docker_compose_container, packages_list, platform_name):
-    # Only the iRODS containers need to have packages installed
-    if context.is_catalog_database_container(docker_compose_container):
+def install_official_irods_packages(docker_client, platform_name, database_name, version, containers):
+    def install_packages(docker_client, docker_compose_container, packages_list, platform_name):
+        # Only the iRODS containers need to have packages installed
+        if context.is_catalog_database_container(docker_compose_container):
+            return 0
+
+        container = docker_client.containers.get(docker_compose_container.name)
+
+        package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_irods_catalog_provider_container(container)])
+
+        cmd = ' '.join([platform_install_command(platform_name), package_list])
+
+        logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
+
+        ec = execute.execute_command(container, platform_update_command(platform_name))
+        if ec is not 0:
+            logging.error('failed to update local repositories [{}]'.format(container.name))
+            return ec
+
+        ec = execute.execute_command(container, cmd)
+        if ec is not 0:
+            logging.error(
+                'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, container.name))
+
+            return ec
+
         return 0
 
-    container = docker_client.containers.get(docker_compose_container.name)
-
-    package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_catalog_service_provider_container(container)])
-
-    cmd = ' '.join([platform_install_command(platform_name), package_list])
-
-    logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
-
-    ec = execute.execute_command(container, platform_update_command(platform_name))
-    if ec is not 0:
-        logging.error('failed to update local repositories [{}]'.format(container.name))
-        return ec
-
-    ec = execute.execute_command(container, cmd)
-    if ec is not 0:
-        logging.error(
-            'failed to install packages on container [ec=[{0}], container=[{1}]'.format(ec, container.name))
-
-        return ec
-
-    return 0
-
-def install_irods_packages_from_official_repository(docker_client, platform_name, database_name, version, containers):
     import concurrent.futures
 
     package_name_list = ['irods-runtime', 'irods-icommands', 'irods-server', 'irods-database-plugin-{}'.format(database_name)]
@@ -199,7 +199,7 @@ def install_irods_packages_from_official_repository(docker_client, platform_name
 
     rc = 0
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures_to_containers = {executor.submit(install_package_on_container_from_official_repository, docker_client, c, packages, platform_name): c for c in containers}
+        futures_to_containers = {executor.submit(install_packages, docker_client, c, packages, platform_name): c for c in containers}
         logging.debug(futures_to_containers)
 
         for f in concurrent.futures.as_completed(futures_to_containers):
@@ -259,16 +259,7 @@ if __name__ == "__main__":
 
     logging.debug('containers on project [{}]'.format([c.name for c in p.containers()]))
 
-    # divine the database image tag if it is not provided
-    if args.database:
-        database = args.database
-        logging.debug('provided database image tag [{}]'.format(database))
-    else:
-        project_name = args.project_name if args.project_name else p.name
-        database = context.image_name(context.database_image_tag(project_name))
-        logging.debug('derived database image tag [{}]'.format(database))
-
-    # divine the platform image tag if it is not provided
+    # derive the platform image tag if it is not provided
     if args.platform:
         platform = args.platform
         logging.debug('provided platform image tag [{}]'.format(platform))
@@ -277,9 +268,18 @@ if __name__ == "__main__":
         platform = context.image_name(context.platform_image_tag(project_name))
         logging.debug('derived platform image tag [{}]'.format(platform))
 
+    # derive the database image tag if it is not provided
+    if args.database:
+        database = args.database
+        logging.debug('provided database image tag [{}]'.format(database))
+    else:
+        project_name = args.project_name if args.project_name else p.name
+        database = context.image_name(context.database_image_tag(project_name))
+        logging.debug('derived database image tag [{}]'.format(database))
+
     if args.package_directory:
         exit(
-            install_irods_packages(
+            install_local_irods_packages(
                 docker.from_env(),
                 platform,
                 database,
@@ -290,7 +290,7 @@ if __name__ == "__main__":
 
     # Even if no version was provided, we default to using the latest official release
     exit(
-        install_irods_packages_from_official_repository(
+        install_official_irods_packages(
             docker.from_env(),
             platform,
             database,
