@@ -109,7 +109,9 @@ def install_irods_packages(docker_client, platform_name, package_directory, pack
 
         cmd = ' '.join([platform_upgrade_command(platform_name), package_list])
 
-        execute.execute_command(container, cmd)
+        ec = execute.execute_command(container, cmd)
+        if ec is not 0:
+            raise RuntimeError('failed to install packages [{}]'.format(c.name))
 
         irodsctl(container, 'restart')
 
