@@ -8,7 +8,12 @@ import context
 import execute
 
 class setup_input_builder(object):
-    """Builder for iRODS setup script inputs."""
+    """Builder for iRODS setup script inputs.
+
+    The builder is designed to look like a programmable interface to the iRODS setup script.
+    To that end, each section of the setup script is its own method which sets the values
+    to generate the input string.
+    """
     def __init__(self):
         """Construct a setup input builder.
 
@@ -260,6 +265,15 @@ class setup_input_builder(object):
 
 
 def setup_irods_server(container, setup_input):
+    """Set up iRODS server on the given container with the provided input.
+
+    After setup completes, the server is restarted in order to guarantee that the iRODS server
+    is running and available for immediate use after setting it up.
+
+    Arguments:
+    container -- docker.client.container on which the iRODS packages are installed
+    setup_input -- string which will be provided as input to the iRODS setup script
+    """
     ec = execute.execute_command(container, 'bash -c \'echo "{}" > /input\''.format(setup_input))
     if ec is not 0:
         raise RuntimeError('failed to create setup script input file [{}]'.format(container.name))
@@ -278,6 +292,16 @@ def setup_irods_server(container, setup_input):
 
 
 def setup_irods_catalog_provider(docker_client, project_name, database_service_instance=1, provider_service_instance=1):
+    """Set up iRODS catalog service provider in a docker-compose project.
+
+    Arguments:
+    docker_client -- docker client for interacting with the docker-compose project
+    project_name -- name of the docker-compose project in which the server resides
+    database_service_instance -- the service instance number of the container running the
+                                 database server
+    provider_service_instance -- the service instance number of the container being targeted
+                                 to run the iRODS catalog service provider
+    """
     db_container_name = context.irods_catalog_database_container(project_name, provider_service_instance)
     db_container = docker_client.containers.get(db_container_name)
 
@@ -297,6 +321,16 @@ def setup_irods_catalog_provider(docker_client, project_name, database_service_i
 
 
 def setup_irods_catalog_consumer(docker_client, project_name, provider_service_instance=1, consumer_service_instance=1):
+    """Set up iRODS catalog service consumer in a docker-compose project.
+
+    Arguments:
+    docker_client -- docker client for interacting with the docker-compose project
+    project_name -- name of the docker-compose project in which the server resides
+    provider_service_instance -- the service instance number of the container running the iRODS
+                                 catalog service provider
+    consumer_service_instance -- the service instance number of the container being targeted
+                                 to run the iRODS catalog service consumer
+    """
     csp_container_name = context.irods_catalog_provider_container(project_name, provider_service_instance)
     csp_container = docker_client.containers.get(csp_container_name)
 
