@@ -179,7 +179,8 @@ if __name__ == "__main__":
         configure_irods_testing(docker_client, containers)
 
         # Get the container on which the command is to be executed
-        target_service_name, target_service_instance = args.run_on
+        logging.debug('--run-on-service-instance [{}]'.format(args.run_on.split()))
+        target_service_name, target_service_instance = args.run_on.split()
         container = docker_client.containers.get(context.container_name(p.name, target_service_name, target_service_instance))
         logging.debug('got container to run on [{}]'.format(container.name))
 
