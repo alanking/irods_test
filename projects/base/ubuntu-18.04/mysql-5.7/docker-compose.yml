@@ -1,7 +1,7 @@
 version: '3'
 
 services:
-  icat:
+  catalog:
     image: mysql:5.7
     environment:
       - MYSQL_ROOT_PASSWORD=testpassword
@@ -27,15 +27,15 @@ services:
     volumes:
       - "../../../catalogs/mysql-5.7/db_commands.sql:/docker-entrypoint-initdb.d/db_commands.sql:ro"
 
-    irods-catalog-provider:
-        build:
-            context: ..
-        depends_on:
-            - catalog
+  irods-catalog-provider:
+    build:
+      context: ..
+    depends_on:
+      - catalog
 
-    irods-catalog-consumer:
-        build:
-            context: ..
-        depends_on:
-            - irods-catalog-provider
+  irods-catalog-consumer:
+    build:
+      context: ..
+    depends_on:
+      - irods-catalog-provider
 
