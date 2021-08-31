@@ -24,6 +24,8 @@ if __name__ == "__main__":
                         help='If indicated, skips the setup of iRODS tables and postgres user in the database.')
     parser.add_argument('--exclude-irods-catalog-provider-setup', dest='setup_irods_catalog_provider', action='store_false',
                         help='If indicated, skips running the iRODS setup script on the catalog service provider.')
+    parser.add_argument('--exclude-irods-catalog-consumers-setup', dest='setup_irods_catalog_consumers', action='store_false',
+                        help='If indicated, skips running the iRODS setup script on the catalog service consumers.')
     parser.add_argument('--verbose', '-v', dest='verbosity', action='count', default=1,
                         help='Increase the level of output to stdout. CRITICAL and ERROR messages will always be printed.')
 
@@ -59,7 +61,8 @@ if __name__ == "__main__":
         if args.setup_irods_catalog_provider:
             irods_setup.setup_irods_catalog_provider(docker_client, p.name)
 
-        irods_setup.setup_irods_catalog_consumers(docker_client, p)
+        if args.setup_irods_catalog_consumers:
+            irods_setup.setup_irods_catalog_consumers(docker_client, p)
 
     except Exception as e:
         logging.critical(e)
