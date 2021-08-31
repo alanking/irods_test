@@ -5,6 +5,7 @@ import os
 
 # local modules
 import context
+import database_setup
 import execute
 
 class setup_input_builder(object):
@@ -288,8 +289,7 @@ def setup_irods_server(container, setup_input):
 
     ec = execute.execute_command(container, '/var/lib/irods/irodsctl restart', user='irods')
     if ec is not 0:
-        logging.warning('failed to start iRODS server after setup [{}]'.format(container.name))
-        #raise RuntimeError('failed to start iRODS server after setup [{}]'.format(container.name))
+        raise RuntimeError('failed to start iRODS server after setup [{}]'.format(container.name))
 
 
 def setup_irods_catalog_provider(docker_client, project_name, database_service_instance=1, provider_service_instance=1):
@@ -303,18 +303,26 @@ def setup_irods_catalog_provider(docker_client, project_name, database_service_i
     provider_service_instance -- the service instance number of the container being targeted
                                  to run the iRODS catalog service provider
     """
+    database_image = context.database_image_repo_and_tag(project_name)
+    csp_container_name = context.irods_catalog_provider_container(project_name, provider_service_instance)
+    csp_container = docker_client.containers.get(csp_container_name)
+
+    #database_setup.configure_odbc(docker_client, csp_container, project_name, database_image)
+
     db_container_name = context.irods_catalog_database_container(project_name, provider_service_instance)
     db_container = docker_client.containers.get(db_container_name)
 
+    db_server_port = database_setup.make_strategy(database_image).port
+
     setup_input = (setup_input_builder()
                     .service_account(catalog_service_role='provider')
-                    .database_connection(database_server_hostname=context.container_hostname(db_container))
+                    .database_connection(
+                        database_server_hostname=context.container_hostname(db_container),
+                        database_server_port=db_server_port
+                    )
                     .build())
 
     logging.debug('input to setup script [{}]'.format(setup_input))
-
-    csp_container_name = context.irods_catalog_provider_container(project_name, provider_service_instance)
-    csp_container = docker_client.containers.get(csp_container_name)
 
     logging.warning('setting up iRODS catalog provider [{}]'.format(csp_container_name))
 

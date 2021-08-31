@@ -125,7 +125,7 @@ if __name__ == "__main__":
         logging.debug('provided platform image tag [{}]'.format(platform))
     else:
         project_name = args.project_name if args.project_name else p.name
-        platform = context.platform_image_tag(project_name)
+        platform = context.platform_image_repo_and_tag(project_name)
         logging.debug('derived platform image tag [{}]'.format(platform))
 
     # Derive the database image tag if it is not provided
@@ -134,7 +134,7 @@ if __name__ == "__main__":
         logging.debug('provided database image tag [{}]'.format(database))
     else:
         project_name = args.project_name if args.project_name else p.name
-        database = context.database_image_tag(project_name)
+        database = context.database_image_repo_and_tag(project_name)
         logging.debug('derived database image tag [{}]'.format(database))
 
     ec = 0
@@ -153,8 +153,8 @@ if __name__ == "__main__":
                             .format(args.package_directory))
 
             install.install_local_irods_packages(docker_client,
-                                                 context.image_name(platform),
-                                                 context.image_name(database),
+                                                 context.image_repo(platform),
+                                                 context.image_repo(database),
                                                  args.package_directory,
                                                  containers)
         else:
@@ -163,8 +163,8 @@ if __name__ == "__main__":
                             .format(args.package_version))
 
             install.install_official_irods_packages(docker_client,
-                                                    context.image_name(platform),
-                                                    context.image_name(database),
+                                                    context.image_repo(platform),
+                                                    context.image_repo(database),
                                                     args.package_version,
                                                     containers)
 

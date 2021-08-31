@@ -265,7 +265,7 @@ if __name__ == "__main__":
         logging.debug('provided platform image tag [{}]'.format(platform))
     else:
         project_name = args.project_name if args.project_name else p.name
-        platform = context.image_name(context.platform_image_tag(project_name))
+        platform = context.platform_image_repo_and_tag(project_name)[0]
         logging.debug('derived platform image tag [{}]'.format(platform))
 
     # derive the database image tag if it is not provided
@@ -274,7 +274,7 @@ if __name__ == "__main__":
         logging.debug('provided database image tag [{}]'.format(database))
     else:
         project_name = args.project_name if args.project_name else p.name
-        database = context.image_name(context.database_image_tag(project_name))
+        database = context.database_image_repo_and_tag(project_name)[0]
         logging.debug('derived database image tag [{}]'.format(database))
 
     if args.package_directory:

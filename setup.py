@@ -53,7 +53,7 @@ if __name__ == "__main__":
             else:
                 # divine the database image tag if it is not provided
                 project_name = args.project_name if args.project_name else p.name
-                database = context.database_image_tag(project_name)
+                database = context.database_image_repo_and_tag(project_name)
                 logging.debug('derived database image tag [{}]'.format(database))
 
             database_setup.setup_catalog(docker_client, p.name, database)
