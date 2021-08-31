@@ -5,6 +5,7 @@ import logging
 import os
 
 # local modules
+import archive
 import context
 import execute
 
@@ -32,41 +33,11 @@ def package_filename_extension(platform):
     else:
         raise RuntimeError('unsupported platform [{}]'.format(platform))
 
-def put_packages_in_container(container, tarfile_path):
-    # Copy packages tarball into container
-    path_to_packages_dir_in_container = '/' + os.path.basename(tarfile_path)[:len('.tar') * -1]
-
-    logging.debug('putting tarfile [{0}] in container [{1}] at [{2}]'.format(
-        tarfile_path, container.name, path_to_packages_dir_in_container))
-
-    with open(tarfile_path, 'rb') as tf:
-        if not container.put_archive('/', tf):
-            raise RuntimeError('failed to put packages archive into container [{}]'.format(container.name))
-
-    return path_to_packages_dir_in_container
-
 
 def install_package(container, platform, full_path_to_package):
     cmd = ' '.join([platform_install_command(platform), full_path_to_package])
 
     execute.execute_command(container, cmd)
-
-def create_tarfile(members):
-    import tarfile
-    import tempfile
-
-    # Create a tarfile with the packages
-    tarfile_name = 'packages.tar'
-    tarfile_path = os.path.join(tempfile.mkdtemp(), tarfile_name)
-
-    logging.debug('creating tarfile [{}]'.format(tarfile_path))
-
-    with tarfile.open(tarfile_path, 'w') as f:
-        for m in members:
-            logging.debug('adding member [{0}] to tarfile'.format(m))
-            f.add(m)
-
-    return tarfile_path
 
 def get_list_of_package_paths(platform_name, package_directory, package_name_list):
     import glob
@@ -102,7 +73,7 @@ def install_local_irods_packages(docker_client, platform_name, database_name, pa
 
         container = docker_client.containers.get(docker_compose_container.name)
 
-        path_to_packages_in_container = put_packages_in_container(container, packages_tarfile_path)
+        path_to_packages_in_container = archive.copy_archive_to_container(container, packages_tarfile_path)
 
         package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_irods_catalog_provider_container(container)])
 
@@ -132,7 +103,7 @@ def install_local_irods_packages(docker_client, platform_name, database_name, pa
     logging.info('packages to install [{}]'.format(packages))
 
     # TODO: output directory should contain the tarfile of packages for archaeological purposes
-    tarfile_path = create_tarfile(packages)
+    tarfile_path = archive.create_archive(packages)
 
     rc = 0
     with concurrent.futures.ThreadPoolExecutor() as executor:

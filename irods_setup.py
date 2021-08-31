@@ -5,7 +5,7 @@ import os
 
 # local modules
 import context
-import database_setup
+import odbc_setup
 import execute
 
 class setup_input_builder(object):
@@ -307,7 +307,7 @@ def setup_irods_catalog_provider(docker_client, project_name, database_service_i
     csp_container_name = context.irods_catalog_provider_container(project_name, provider_service_instance)
     csp_container = docker_client.containers.get(csp_container_name)
 
-    #database_setup.configure_odbc(docker_client, csp_container, project_name, database_image)
+    odbc_setup.configure_odbc_driver(project_name, csp_container)
 
     db_container_name = context.irods_catalog_database_container(project_name, provider_service_instance)
     db_container = docker_client.containers.get(db_container_name)
