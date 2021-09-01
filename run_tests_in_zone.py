@@ -168,11 +168,11 @@ if __name__ == "__main__":
                                                     args.package_version,
                                                     containers)
 
-        database_setup.setup_catalog(docker_client, project_name, p.containers(), database)
+        database_setup.setup_catalog(docker_client, project_name, database, p.containers())
 
-        irods_setup.setup_irods_catalog_provider(docker_client, p.name)
+        irods_setup.setup_irods_catalog_provider(docker_client, args.project_name)
 
-        irods_setup.setup_irods_catalog_consumers(docker_client, p)
+        irods_setup.setup_irods_catalog_consumers(docker_client, args.project_name, p.containers())
 
         # Configure the containers for running iRODS automated tests
         logging.info('configuring iRODS containers for testing')
