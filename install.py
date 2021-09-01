@@ -11,17 +11,26 @@ import execute
 
 def platform_update_command(platform):
     if 'centos' in platform:
-        return '' # ?
+        return 'yum update -y'
     elif 'ubuntu' in platform:
         return 'apt update'
     else:
         raise RuntimeError('unsupported platform [{}]'.format(platform))
 
-def platform_install_command(platform):
+def platform_install_local_packages_command(platform):
     if 'centos' in platform:
-        return 'rpm -U --force'
+        return 'yum --nogpgcheck localinstall'
+        #return 'rpm -U --force'
     elif 'ubuntu' in platform:
         return 'apt install -fy'
+    else:
+        raise RuntimeError('unsupported platform [{}]'.format(platform))
+
+def platform_install_official_packages_command(platform):
+    if 'centos' in platform:
+        return 'yum install -y'
+    elif 'ubuntu' in platform:
+        return 'apt install -y'
     else:
         raise RuntimeError('unsupported platform [{}]'.format(platform))
 
@@ -33,11 +42,6 @@ def package_filename_extension(platform):
     else:
         raise RuntimeError('unsupported platform [{}]'.format(platform))
 
-
-def install_package(container, platform, full_path_to_package):
-    cmd = ' '.join([platform_install_command(platform), full_path_to_package])
-
-    execute.execute_command(container, cmd)
 
 def get_list_of_package_paths(platform_name, package_directory, package_name_list):
     import glob
@@ -77,7 +81,7 @@ def install_local_irods_packages(docker_client, platform_name, database_name, pa
 
         package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_irods_catalog_provider_container(container)])
 
-        cmd = ' '.join([platform_install_command(platform_name), package_list])
+        cmd = ' '.join([platform_install_local_packages_command(platform_name), package_list])
 
         logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
 
@@ -138,7 +142,7 @@ def install_official_irods_packages(docker_client, platform_name, database_name,
 
         package_list = ' '.join([p for p in packages_list if not is_package_database_plugin(p) or context.is_irods_catalog_provider_container(container)])
 
-        cmd = ' '.join([platform_install_command(platform_name), package_list])
+        cmd = ' '.join([platform_install_official_packages_command(platform_name), package_list])
 
         logging.warning('executing cmd [{0}] on container [{1}]'.format(cmd, container.name))
 
