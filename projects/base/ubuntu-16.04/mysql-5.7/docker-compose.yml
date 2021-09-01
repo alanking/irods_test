@@ -5,6 +5,8 @@ services:
     image: mysql:5.7
     environment:
       - MYSQL_ROOT_PASSWORD=testpassword
+      - MYSQL_USER=irods
+      - MYSQL_PASSWORD=testpassword
     # Our preferred choice character set encoding and collation scheme is UTF-8, as shown below,
     # but attempting to use those results in an iRODS setup error. The error is caused by a table
     # exceeding the maximum row size allowed by MySQL.
