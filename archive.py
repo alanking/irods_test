@@ -2,6 +2,9 @@
 import logging
 import os
 
+# local modules
+import execute
+
 def create_archive(members):
     """Create a local archive file with the files in `members` and return a path to the file.
 
@@ -36,7 +39,7 @@ def copy_archive_to_container(container, archive_file_path_on_host, extension='.
     archive_file_path_on_host -- local path to the archive being copied
     """
     path = os.path.abspath(archive_file_path_on_host)
-    path_to_exploded_archive_in_container = os.path.basename(path)[:len(extension) * -1]
+    path_to_exploded_archive_in_container = '/' + os.path.basename(path)[:len(extension) * -1]
 
     logging.debug('putting archive [{0}] in container [{1}] at [{2}]'.format(
         archive_file_path_on_host, container.name, path_to_exploded_archive_in_container))

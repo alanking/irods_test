@@ -23,7 +23,19 @@ def service_instance(container_name):
 
 
 def container_name(project_name, service_name, service_instance=1):
-    return '_'.join([project_name, service_name, str(service_instance)])
+    """Return the name of the container as constructed by docker-compose.
+
+    The passed in `project_name` will have dots (.) removed because docker-compose strips all
+    dots from its project names. docker-compose container names are generated in three parts
+    which are delimited by underscores, like this:
+        project-name_service-name_service-instance-as-a-1-indexed-integer
+
+    Arguments:
+    project_name -- name of the docker-compose project (1)
+    service_name -- name of the service in the docker-compose project (2)
+    service_instance -- number of the instance of the service instance (3)
+    """
+    return '_'.join([project_name.replace('.', ''), service_name, str(service_instance)])
 
 
 def container_hostname(container):

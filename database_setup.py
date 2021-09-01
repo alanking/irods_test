@@ -157,14 +157,14 @@ class mysql_database_setup_strategy(database_setup_strategy):
         self.root_password = root_password if root_password else 'testpassword'
         self.port = port if port else 3306
 
-    def execute_mysql_command(self, mysql_cmd):
+    def execute_mysql_command(self, mysql_cmd, user='root', password='testpassword'):
         """Execute a mysql command as the postgres user.
 
         Arguments:
         mysql_cmd -- the command to be passed to mysql via --execute
         """
-        cmd = ('mysql --port {0} --user root --password={1} --execute \"{2}\"'
-            .format(self.port, self.root_password, mysql_cmd))
+        cmd = ('mysql --port {0} --user {1} --password={2} --execute \"{3}\"'
+            .format(self.port, user, password, mysql_cmd))
         return execute.execute_command(self.container, cmd)
 
     def create_database(self, name):
