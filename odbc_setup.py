@@ -41,13 +41,13 @@ platform_to_odbc_context = {
     }
 }
 
-def configure_postgres_odbc_driver(project_name, csp_container, path_to_odbc_driver):
+def configure_postgres_odbc_driver(project_name, csp_container, odbc_driver_path):
     """Configure ODBC driver for postgres.
 
     Argument:
     project_name -- name of the docker-compose project in which the server resides
     csp_container -- docker container on which the iRODS catalog service provider is running
-    path_to_odbc_driver -- path to local archive file containing the ODBC driver package
+    odbc_driver_path -- path to local archive file containing the ODBC driver package
     """
     logging.debug('no ODBC driver setup required for postgres [{}]'.format(csp_container))
 
@@ -91,13 +91,13 @@ def make_mysql_odbcinst_ini(csp_container, container_odbc_driver_dir):
     execute.execute_command(csp_container, 'cat {}'.format(odbcinst_ini_path))
 
 
-def configure_mysql_odbc_driver(project_name, csp_container, path_to_odbc_driver):
+def configure_mysql_odbc_driver(project_name, csp_container, odbc_driver_path):
     """Configure ODBC driver for mysql.
 
     Argument:
     project_name -- name of the docker-compose project in which the server resides
     csp_container -- docker container on which the iRODS catalog service provider is running
-    path_to_odbc_driver -- path to local archive file containing the ODBC driver package
+    odbc_driver_path -- path to local archive file containing the ODBC driver package
     """
     odbc_driver = odbc_driver_path if odbc_driver_path else get_odbc_driver_path(project_name)
     logging.info('looking for odbc driver [{}]'.format(odbc_driver))
@@ -108,13 +108,13 @@ def configure_mysql_odbc_driver(project_name, csp_container, path_to_odbc_driver
 
     make_mysql_odbcinst_ini(csp_container, container_odbc_driver_dir)
 
-def configure_mysql_odbc_driver_centos_7_mysql_57(project_name, csp_container, path_to_odbc_driver):
+def configure_mysql_odbc_driver_centos_7_mysql_57(project_name, csp_container, odbc_driver_path):
     """Configure ODBC driver for mysql.
 
     Argument:
     project_name -- name of the docker-compose project in which the server resides
     csp_container -- docker container on which the iRODS catalog service provider is running
-    path_to_odbc_driver -- path to local archive file containing the ODBC driver package
+    odbc_driver_path -- path to local archive file containing the ODBC driver package
     """
     odbc_driver = odbc_driver_path if odbc_driver_path else get_odbc_driver_path(project_name)
     logging.info('looking for odbc driver [{}]'.format(odbc_driver))
@@ -145,13 +145,13 @@ def configure_mysql_odbc_driver_centos_7_mysql_57(project_name, csp_container, p
             .format(ec, csp_container.name))
 
 
-def configure_odbc_driver(project_name, csp_container, path_to_odbc_driver=None):
+def configure_odbc_driver(project_name, csp_container, odbc_driver_path=None):
     """Make an ODBC setup strategy for the given database type.
 
     Arguments:
     project_name -- name of the docker-compose project in which the server resides
     csp_container -- docker container on which the iRODS catalog service provider is running
-    path_to_odbc_driver -- if specified, the ODBC driver will be sought here
+    odbc_driver_path -- if specified, the ODBC driver will be sought here
     """
     database_tag = context.database_image_repo_and_tag(project_name)
     platform_tag = context.platform_image_repo_and_tag(project_name)
@@ -160,4 +160,4 @@ def configure_odbc_driver(project_name, csp_container, path_to_odbc_driver=None)
                                          [context.image_repo_and_tag_string(platform_tag)]
                                          ['configuration'])
 
-    eval(func_name)(project_name, csp_container, path_to_odbc_driver)
+    eval(func_name)(project_name, csp_container, odbc_driver_path)
