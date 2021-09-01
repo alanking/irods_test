@@ -107,13 +107,15 @@ if __name__ == "__main__":
     project_directory = os.path.abspath(args.project_directory)
     p = compose.cli.command.get_project(project_directory, project_name=args.project_name)
 
+    project_name = args.project_name if args.project_name else p.name
+
     job_name = job_name(p.name, args.job_name)
 
     if args.output_directory:
         dirname = args.output_directory
     else:
         import tempfile
-        dirname = tempfile.mkdtemp(prefix=args.project_name)
+        dirname = tempfile.mkdtemp(prefix=project_name)
 
     output_directory = make_output_directory(dirname, job_name)
 
@@ -124,7 +126,6 @@ if __name__ == "__main__":
         platform = args.platform
         logging.debug('provided platform image tag [{}]'.format(platform))
     else:
-        project_name = args.project_name if args.project_name else p.name
         platform = context.platform_image_repo_and_tag(project_name)
         logging.debug('derived platform image tag [{}]'.format(platform))
 
@@ -133,7 +134,6 @@ if __name__ == "__main__":
         database = args.database
         logging.debug('provided database image tag [{}]'.format(database))
     else:
-        project_name = args.project_name if args.project_name else p.name
         database = context.database_image_repo_and_tag(project_name)
         logging.debug('derived database image tag [{}]'.format(database))
 
@@ -168,7 +168,7 @@ if __name__ == "__main__":
                                                     args.package_version,
                                                     containers)
 
-        database_setup.setup_catalog(docker_client, p.name, database)
+        database_setup.setup_catalog(docker_client, project_name, p.containers(), database)
 
         irods_setup.setup_irods_catalog_provider(docker_client, p.name)
 

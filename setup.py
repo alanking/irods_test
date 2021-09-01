@@ -46,23 +46,23 @@ if __name__ == "__main__":
         exit(1)
 
     try:
+        project_name = args.project_name if args.project_name else p.name
         if args.setup_catalog:
             if args.database:
                 database = args.database
                 logging.debug('provided database image tag [{}]'.format(database))
             else:
                 # divine the database image tag if it is not provided
-                project_name = args.project_name if args.project_name else p.name
                 database = context.database_image_repo_and_tag(project_name)
                 logging.debug('derived database image tag [{}]'.format(database))
 
-            database_setup.setup_catalog(docker_client, p.name, database)
+            database_setup.setup_catalog(docker_client, project_name, database)
 
         if args.setup_irods_catalog_provider:
-            irods_setup.setup_irods_catalog_provider(docker_client, p.name)
+            irods_setup.setup_irods_catalog_provider(docker_client, project_name)
 
         if args.setup_irods_catalog_consumers:
-            irods_setup.setup_irods_catalog_consumers(docker_client, p)
+            irods_setup.setup_irods_catalog_consumers(docker_client, project_name, p.containers())
 
     except Exception as e:
         logging.critical(e)

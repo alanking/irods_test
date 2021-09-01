@@ -5,6 +5,7 @@ import os
 
 # local modules
 import context
+import database_setup
 import odbc_setup
 import execute
 
@@ -357,7 +358,7 @@ def setup_irods_catalog_consumer(docker_client, project_name, provider_service_i
 
     setup_irods_server(csc_container, setup_input)
 
-def setup_irods_catalog_consumers(docker_client, project, irods_catalog_provider_service_instance=1):
+def setup_irods_catalog_consumers(docker_client, project_name, containers, irods_catalog_provider_service_instance=1):
     """Set up all iRODS catalog service consumers in a docker-compose project in parallel.
 
     Arguments:
@@ -374,17 +375,17 @@ def setup_irods_catalog_consumers(docker_client, project, irods_catalog_provider
             executor.submit(
                 setup_irods_catalog_consumer,
                 docker_client,
-                project.name,
+                project_name,
                 irods_catalog_provider_service_instance,
                 (i + 1) # add 1 to match docker-compose's service instance numbering scheme
-            ): i for i in range(len(context.irods_catalog_consumer_containers(project.containers())))
+            ): i for i in range(len(context.irods_catalog_consumer_containers(containers)))
         }
 
         logging.debug(futures_to_containers)
 
         for f in concurrent.futures.as_completed(futures_to_containers):
             instance = futures_to_containers[f]
-            container_name = context.irods_catalog_consumer_container(project.name, instance + 1)
+            container_name = context.irods_catalog_consumer_container(project_name, instance + 1)
             try:
                 f.result()
                 logging.debug('setup completed successfully [{}]'.format(container_name))

@@ -220,11 +220,12 @@ if __name__ == "__main__":
     logs.configure(args.verbosity)
 
     p = compose.cli.command.get_project(os.path.abspath(args.project_directory), project_name=args.project_name)
+    project_name = args.project_name if args.project_name else p.name
 
     if len(p.containers()) is 0:
         logging.critical(
             'no containers found for project [directory=[{0}], name=[{1}]]'.format(
-            os.path.abspath(args.project_directory), args.project_name))
+            os.path.abspath(args.project_directory), project_name))
 
         exit(1)
 
@@ -235,7 +236,6 @@ if __name__ == "__main__":
         platform = args.platform
         logging.debug('provided platform image tag [{}]'.format(platform))
     else:
-        project_name = args.project_name if args.project_name else p.name
         platform = context.platform_image_repo_and_tag(project_name)[0]
         logging.debug('derived platform image tag [{}]'.format(platform))
 
@@ -244,7 +244,6 @@ if __name__ == "__main__":
         database = args.database
         logging.debug('provided database image tag [{}]'.format(database))
     else:
-        project_name = args.project_name if args.project_name else p.name
         database = context.database_image_repo_and_tag(project_name)[0]
         logging.debug('derived database image tag [{}]'.format(database))
 
