@@ -169,7 +169,7 @@ if __name__ == "__main__":
 
         database_setup.setup_catalog(docker_client, p, database)
 
-        irods_setup.setup_irods_catalog_provider(docker_client, compose_project, platform, database)
+        irods_setup.setup_irods_catalog_provider(docker_client, p, platform, database)
 
         irods_setup.setup_irods_catalog_consumers(docker_client, p, platform, database)
 
