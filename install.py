@@ -19,7 +19,7 @@ def platform_update_command(platform):
 
 def platform_install_local_packages_command(platform):
     if 'centos' in platform:
-        return 'yum --nogpgcheck localinstall'
+        return 'yum --nogpgcheck -y install'
         #return 'rpm -U --force'
     elif 'ubuntu' in platform:
         return 'apt install -fy'
@@ -28,7 +28,7 @@ def platform_install_local_packages_command(platform):
 
 def platform_install_official_packages_command(platform):
     if 'centos' in platform:
-        return 'yum install -y'
+        return 'yum -y install'
     elif 'ubuntu' in platform:
         return 'apt install -y'
     else:
@@ -235,28 +235,28 @@ if __name__ == "__main__":
 
     logging.debug('containers on project [{}]'.format([c.name for c in p.containers()]))
 
-    # derive the platform image tag if it is not provided
-    if args.platform:
-        platform = args.platform
-        logging.debug('provided platform image tag [{}]'.format(platform))
-    else:
-        platform = context.platform_image_repo_and_tag(project_name)[0]
-        logging.debug('derived platform image tag [{}]'.format(platform))
+    platform = args.platform
+    if not platform:
+        platform = context.image_repo_and_tag_string(
+            context.platform_image_repo_and_tag(project_name)
+        )
 
-    # derive the database image tag if it is not provided
-    if args.database:
-        database = args.database
-        logging.debug('provided database image tag [{}]'.format(database))
-    else:
-        database = context.database_image_repo_and_tag(project_name)[0]
+        logging.debug('derived os platform image tag [{}]'.format(platform))
+
+    database = args.database
+    if not database:
+        database = context.image_repo_and_tag_string(
+            context.database_image_repo_and_tag(project_name))
+
         logging.debug('derived database image tag [{}]'.format(database))
+
 
     if args.package_directory:
         exit(
             install_local_irods_packages(
                 docker.from_env(),
-                platform,
-                database,
+                context.image_repo(platform),
+                context.image_repo(database),
                 os.path.abspath(args.package_directory),
                 p.containers()
             )
@@ -266,8 +266,8 @@ if __name__ == "__main__":
     exit(
         install_official_irods_packages(
             docker.from_env(),
-            platform,
-            database,
+            context.image_repo(platform),
+            context.image_repo(database),
             args.package_version,
             p.containers()
         )

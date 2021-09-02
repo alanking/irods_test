@@ -1,25 +1,58 @@
 def irods_catalog_database_service():
+    """Return name of the iRODS catalog database server docker-compose service."""
     return 'catalog'
 
 
 def irods_catalog_provider_service():
+    """Return name of the iRODS catalog service provider docker-compose service."""
     return 'irods-catalog-provider'
 
 
 def irods_catalog_consumer_service():
+    """Return name of the iRODS catalog service consumer docker-compose service."""
     return 'irods-catalog-consumer'
 
 
+def sanitize(repo_or_tag):
+    """Sanitize the input from special characters rejected by docker-compose.
+
+    Arguments:
+    repo_or_tag -- input string which should represent a docker image repo or tag
+    """
+    return (repo_or_tag.replace('.', '')
+                       .replace(':', '')
+                       .replace('/', ''))
+
+
 def project_name(container_name):
+    """Return the docker-compose project name based on the `container_name`.
+
+    NOTE: docker-compose "sanitizes" project names to remove certain special characters, so the
+    `--project-name` provided to `docker-compose` may be different from the project name used
+    when constructed the name of the image(s) and container(s).
+
+    Arguments:
+    container_name -- the name of the container from which the project name is extracted
+    """
     return container_name.split('_')[0]
 
 
 def service_name(container_name):
+    """Return the docker-compose project service name based on the `container_name`.
+
+    Arguments:
+    container_name -- the name of the container from which the service name is extracted
+    """
     return container_name.split('_')[1]
 
 
 def service_instance(container_name):
-    return container_name.split('_')[2]
+    """Return the service instance number based on the `container_name`.
+
+    Arguments:
+    container_name -- the name of the container from which the service instance is extracted
+    """
+    return int(container_name.split('_')[2])
 
 
 def container_name(project_name, service_name, service_instance=1):
@@ -35,7 +68,7 @@ def container_name(project_name, service_name, service_instance=1):
     service_name -- name of the service in the docker-compose project (2)
     service_instance -- number of the instance of the service instance (3)
     """
-    return '_'.join([project_name.replace('.', ''), service_name, str(service_instance)])
+    return '_'.join([sanitize(project_name), service_name, str(service_instance)])
 
 
 def container_hostname(container):

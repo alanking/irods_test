@@ -8,61 +8,44 @@ import archive
 import context
 import execute
 
-# This is used to map a database-platform combination to a driver and a function for configuration
-platform_to_odbc_context = {
-    'mysql:5.7': {
-        'centos:7': {
-            'driver': os.path.join(os.getcwd(),
-                                   'projects',
-                                   'base',
-                                   'centos-7',
-                                   'mysql-5.7',
-                                   'mysql-connector-odbc-5.2.7-linux-el6-x86-64bit.tar.gz'),
-            'configuration': 'configure_mysql_odbc_driver_centos_7_mysql_57'
-        },
-        'ubuntu:16.04': {
-            'driver': os.path.join(os.getcwd(),
-                                   'projects',
-                                   'base',
-                                   'ubuntu-16.04',
-                                   'mysql-5.7',
-                                   'mysql-connector-odbc-5.2.7-linux-glibc2.5-x86-64bit.tar.gz'),
-            'configuration': 'configure_mysql_odbc_driver'
-        },
-        'ubuntu:18.04': {
-            'driver': os.path.join(os.getcwd(),
-                                   'projects',
-                                   'base',
-                                   'ubuntu-18.04',
-                                   'mysql-5.7',
-                                   'mysql-connector-odbc-5.2.7-linux-glibc2.5-x86-64bit.tar.gz'),
-            'configuration': 'configure_mysql_odbc_driver'
-        },
-    }
-}
-
-def configure_postgres_odbc_driver(project_name, csp_container, odbc_driver_path):
+def configure_postgres_odbc_driver(database_image, csp_container, odbc_driver):
     """Configure ODBC driver for postgres.
 
     Argument:
-    project_name -- name of the docker-compose project in which the server resides
     csp_container -- docker container on which the iRODS catalog service provider is running
-    odbc_driver_path -- path to local archive file containing the ODBC driver package
+    odbc_driver -- path to local archive file containing the ODBC driver package
     """
-    logging.debug('no ODBC driver setup required for postgres [{}]'.format(csp_container))
+    logging.debug('no ODBC driver setup required for postgres 10.12 [{}]'.format(csp_container))
 
 
-def get_odbc_driver_path(project_name):
-    """Get ODBC driver path from the context map based on database and platform.
+def configure_odbc_driver_ubuntu_1604_postgres_1012(csp_container, odbc_driver):
+    """Configure ODBC driver for postgres 10.12 on ubuntu 16.04.
 
-    Arguments:
-    project_name -- name of the docker-compose project from which the map keys are derived
+    Argument:
+    csp_container -- docker container on which the iRODS catalog service provider is running
+    odbc_driver -- path to local archive file containing the ODBC driver package
     """
-    platform_tag = context.platform_image_repo_and_tag(project_name)
-    database_tag = context.database_image_repo_and_tag(project_name)
-    return (platform_to_odbc_context[context.image_repo_and_tag_string(database_tag)]
-                                    [context.image_repo_and_tag_string(platform_tag)]
-                                    ['driver'])
+    configure_postgres_odbc_driver(csp_container, odbc_driver)
+
+
+def configure_odbc_driver_ubuntu_1804_postgres_1012(csp_container, odbc_driver):
+    """Configure ODBC driver for postgres 10.12 on ubuntu 18.04.
+
+    Argument:
+    csp_container -- docker container on which the iRODS catalog service provider is running
+    odbc_driver -- path to local archive file containing the ODBC driver package
+    """
+    configure_postgres_odbc_driver(csp_container, odbc_driver)
+
+
+def configure_odbc_driver_centos_7_postgres_1012(csp_container, odbc_driver):
+    """Configure ODBC driver for postgres 10.12 on centos 7.
+
+    Argument:
+    csp_container -- docker container on which the iRODS catalog service provider is running
+    odbc_driver -- path to local archive file containing the ODBC driver package
+    """
+    configure_postgres_odbc_driver(csp_container, odbc_driver)
 
 
 def make_mysql_odbcinst_ini(csp_container, container_odbc_driver_dir):
@@ -91,73 +74,137 @@ def make_mysql_odbcinst_ini(csp_container, container_odbc_driver_dir):
     execute.execute_command(csp_container, 'cat {}'.format(odbcinst_ini_path))
 
 
-def configure_mysql_odbc_driver(project_name, csp_container, odbc_driver_path):
-    """Configure ODBC driver for mysql.
+def configure_mysql_odbc_driver(csp_container, odbc_driver, extension='.tar.gz'):
+    """Configure ODBC driver for mysql and return the ODBC driver path.
 
     Argument:
-    project_name -- name of the docker-compose project in which the server resides
     csp_container -- docker container on which the iRODS catalog service provider is running
-    odbc_driver_path -- path to local archive file containing the ODBC driver package
+    odbc_driver -- path to local archive file containing the ODBC driver package
+    extension -- file extension for the archive file
     """
-    odbc_driver = odbc_driver_path if odbc_driver_path else get_odbc_driver_path(project_name)
+    if not os.path.exists(odbc_driver):
+        raise RuntimeError('indicated ODBC driver does not exist [{}]'.format(odbc_driver))
+
     logging.info('looking for odbc driver [{}]'.format(odbc_driver))
 
     container_odbc_driver_dir = archive.copy_archive_to_container(csp_container,
                                                                   odbc_driver,
-                                                                  extension='.tar.gz')
+                                                                  extension=extension)
+
+    execute.execute_command(csp_container, 'ls -l {}'.format(container_odbc_driver_dir))
 
     make_mysql_odbcinst_ini(csp_container, container_odbc_driver_dir)
 
-def configure_mysql_odbc_driver_centos_7_mysql_57(project_name, csp_container, odbc_driver_path):
-    """Configure ODBC driver for mysql.
+    return container_odbc_driver_dir
+
+
+def download_mysql_odbc_driver(url, destination=None):
+    """Downloads the file indicated by `url` and returns the path to the file.
+
+    Arguments:
+    url -- URL of the file to download
+    destination -- destination path on local filesystem for the file to be downloaded
+    """
+    import shutil
+    import tempfile
+    import urllib.request
+
+    if not destination:
+        from urllib.parse import urlparse
+        destination = os.path.join('/tmp', os.path.basename(urlparse(url).path))
+
+    logging.info('downloading [{}] to [{}]'.format(url, destination))
+
+    with urllib.request.urlopen(url) as r:
+        with open(destination, 'w+b') as f:
+            shutil.copyfileobj(r, f)
+
+    return f.name
+
+
+def configure_odbc_driver_ubuntu_1604_mysql_57(csp_container, odbc_driver):
+    """Configure ODBC driver for mysql 5.7 on ubuntu 16.04.
 
     Argument:
-    project_name -- name of the docker-compose project in which the server resides
     csp_container -- docker container on which the iRODS catalog service provider is running
-    odbc_driver_path -- path to local archive file containing the ODBC driver package
+    odbc_driver -- path to local archive file containing the ODBC driver package
     """
-    odbc_driver = odbc_driver_path if odbc_driver_path else get_odbc_driver_path(project_name)
-    logging.info('looking for odbc driver [{}]'.format(odbc_driver))
+    if not odbc_driver:
+        odbc_driver = download_mysql_odbc_driver(
+            'https://downloads.mysql.com/archives/get/p/10/file/mysql-connector-odbc-5.3.13-linux-ubuntu16.04-x86-64bit.tar.gz')
 
-    container_odbc_driver_dir = archive.copy_archive_to_container(csp_container,
-                                                                  odbc_driver,
-                                                                  extension='.tar.gz')
+    configure_mysql_odbc_driver(csp_container, os.path.abspath(odbc_driver))
 
-    make_mysql_odbcinst_ini(csp_container, container_odbc_driver_dir)
 
-    # Instructions from https://dev.mysql.com/doc/connector-odbc/en/connector-odbc-installation-binary-unix-tarball.html
-    # This is highly specific to this driver version and this platform
-    # This is needed in order for the older MySQL ODBC connector to work (TODO: Verify)
-    copy_odbc_drivers_to_known_locations = ('cp {0}/lib/* /usr/lib64 && cp {0}/bin/* /usr/bin'
-                                            .format(container_odbc_driver_dir))
-    link_new_odbc_drivers_to_old_drivers = textwrap.dedent('''
-        ln -s /usr/lib64/libodbc.so.2.0.0 /usr/lib64/libodbc.so.1 &&
-        ln -s /usr/lib64/libodbcinst.so.2.0.0 /usr/lib64/libodbcinst.so.1''')
+def configure_odbc_driver_ubuntu_1804_mysql_57(csp_container, odbc_driver):
+    """Configure ODBC driver for mysql 5.7 on ubuntu 18.04.
 
+    Argument:
+    csp_container -- docker container on which the iRODS catalog service provider is running
+    odbc_driver -- path to local archive file containing the ODBC driver package
+    """
+    if not odbc_driver:
+        odbc_driver = download_mysql_odbc_driver(
+            'https://downloads.mysql.com/archives/get/p/10/file/mysql-connector-odbc-5.3.13-linux-ubuntu18.04-x86-64bit.tar.gz')
+
+    configure_mysql_odbc_driver(csp_container, os.path.abspath(odbc_driver))
+
+
+def configure_odbc_driver_centos_7_mysql_57(csp_container, odbc_driver):
+    """Configure ODBC driver for mysql 5.7 on centos 7.
+
+    Argument:
+    csp_container -- docker container on which the iRODS catalog service provider is running
+    odbc_driver -- path to local archive file containing the ODBC driver package
+    """
+    if not odbc_driver:
+        odbc_driver = download_mysql_odbc_driver(
+            #'https://downloads.mysql.com/archives/get/p/10/file/mysql-connector-odbc-5.3.13-linux-el7-x86-64bit.tar.gz')
+            'https://downloads.mysql.com/archives/get/p/10/file/mysql-connector-odbc-5.2.7-linux-el6-x86-64bit.tar.gz')
+
+    driver_path = configure_mysql_odbc_driver(csp_container, os.path.abspath(odbc_driver))
+
+    # see https://dev.mysql.com/doc/connector-odbc/en/connector-odbc-installation-binary-unix-tarball.html
+    copy_odbc_drivers_to_known_locations = (
+        'cp {0}/lib/* /usr/lib64 && cp {0}/bin/* /usr/bin'.format(
+            driver_path
+            #archive.path_to_archive_in_container(odbc_driver, extension='.tar.gz')
+        )
+    )
     ec = execute.execute_command(csp_container, 'bash -c \'{}\''.format(copy_odbc_drivers_to_known_locations))
     if ec is not 0:
-        raise RuntimeError('failed to copy odbc drivers ec=[{}] [{}]]'
-            .format(ec, csp_container.name))
+        raise RuntimeError('failed to copy odbc drivers [{}] ec=[{}] [{}]'
+            .format(copy_odbc_drivers_to_known_locations, ec, csp_container.name))
 
+    # This is needed in order for the older MySQL ODBC connector to work (TODO: Verify)
+    link_new_odbc_drivers_to_old_drivers = textwrap.dedent('''\
+        ln -s /usr/lib64/libodbc.so.2.0.0 /usr/lib64/libodbc.so.1 && \
+        ln -s /usr/lib64/libodbcinst.so.2.0.0 /usr/lib64/libodbcinst.so.1''')
     ec = execute.execute_command(csp_container, 'bash -c \'{}\''.format(link_new_odbc_drivers_to_old_drivers))
     if ec is not 0:
         raise RuntimeError('failed to symlink newer mysql ODBC drivers ec=[{}] [{}]'
             .format(ec, csp_container.name))
 
 
-def configure_odbc_driver(project_name, csp_container, odbc_driver_path=None):
+def configure_odbc_driver(platform_image, database_image, csp_container, odbc_driver=None):
     """Make an ODBC setup strategy for the given database type.
 
     Arguments:
-    project_name -- name of the docker-compose project in which the server resides
+    platform_image -- repo:tag for the docker image of the platform running the iRODS servers
+    database_image -- repo:tag for the docker image of the database server
     csp_container -- docker container on which the iRODS catalog service provider is running
-    odbc_driver_path -- if specified, the ODBC driver will be sought here
+    odbc_driver -- if specified, the ODBC driver will be sought here
     """
-    database_tag = context.database_image_repo_and_tag(project_name)
-    platform_tag = context.platform_image_repo_and_tag(project_name)
+    import inspect
+    # generate the function name of the form:
+    #   configure_odbc_driver_platform-repo_platform-tag_database-repo_database-tag
+    func_name = '_'.join([inspect.currentframe().f_code.co_name,
+                          context.sanitize(context.image_repo(platform_image)),
+                          context.sanitize(context.image_tag(platform_image)),
+                          context.sanitize(context.image_repo(database_image)),
+                          context.sanitize(context.image_tag(database_image))])
 
-    func_name = (platform_to_odbc_context[context.image_repo_and_tag_string(database_tag)]
-                                         [context.image_repo_and_tag_string(platform_tag)]
-                                         ['configuration'])
+    logging.debug(func_name)
 
-    eval(func_name)(project_name, csp_container, odbc_driver_path)
+    eval(func_name)(csp_container, odbc_driver)
+

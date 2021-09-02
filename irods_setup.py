@@ -1,4 +1,5 @@
 # grown-up modules
+import compose
 import docker
 import logging
 import os
@@ -293,81 +294,129 @@ def setup_irods_server(container, setup_input):
         raise RuntimeError('failed to start iRODS server after setup [{}]'.format(container.name))
 
 
-def setup_irods_catalog_provider(docker_client, project_name, database_service_instance=1, provider_service_instance=1):
+def setup_irods_catalog_provider(docker_client,
+                                 compose_project,
+                                 platform_image,
+                                 database_image,
+                                 database_service_instance=1,
+                                 provider_service_instance=1,
+                                 odbc_driver=None):
     """Set up iRODS catalog service provider in a docker-compose project.
 
     Arguments:
     docker_client -- docker client for interacting with the docker-compose project
-    project_name -- name of the docker-compose project in which the server resides
+    compose_project -- compose.project in which the iRODS catalog provider is running
+    platform_image -- repo:tag for the docker image of the platform running the iRODS servers
+    database_image -- repo:tag for the docker image of the database server
     database_service_instance -- the service instance number of the container running the
                                  database server
     provider_service_instance -- the service instance number of the container being targeted
                                  to run the iRODS catalog service provider
+    odbc_driver -- path to the local archive file containing the ODBC driver
     """
-    database_image = context.database_image_repo_and_tag(project_name)
-    csp_container_name = context.irods_catalog_provider_container(project_name, provider_service_instance)
-    csp_container = docker_client.containers.get(csp_container_name)
+    csp_container = docker_client.containers.get(
+        context.irods_catalog_provider_container(
+            compose_project.name, provider_service_instance
+        )
+    )
 
-    odbc_setup.configure_odbc_driver(project_name, csp_container)
+    odbc_setup.configure_odbc_driver(platform_image, database_image, csp_container, odbc_driver)
 
-    db_container_name = context.irods_catalog_database_container(project_name, provider_service_instance)
-    db_container = docker_client.containers.get(db_container_name)
-
-    db_server_port = database_setup.make_strategy(database_image).port
+    db_container = docker_client.containers.get(
+        context.irods_catalog_database_container(
+            compose_project.name, provider_service_instance
+        )
+    )
 
     setup_input = (setup_input_builder()
-                    .service_account(catalog_service_role='provider')
-                    .database_connection(
-                        database_server_hostname=context.container_hostname(db_container),
-                        database_server_port=db_server_port
-                    )
-                    .build())
+        .service_account(catalog_service_role='provider')
+        .database_connection(
+            database_server_hostname=context.container_hostname(db_container),
+            database_server_port=database_setup.database_server_port(database_image)
+        )
+        .build()
+    )
 
     logging.debug('input to setup script [{}]'.format(setup_input))
 
-    logging.warning('setting up iRODS catalog provider [{}]'.format(csp_container_name))
+    logging.warning('setting up iRODS catalog provider [{}]'.format(csp_container.name))
 
     setup_irods_server(csp_container, setup_input)
 
 
-def setup_irods_catalog_consumer(docker_client, project_name, provider_service_instance=1, consumer_service_instance=1):
+def setup_irods_catalog_consumer(docker_client,
+                                 compose_project,
+                                 platform_image,
+                                 database_image,
+                                 provider_service_instance=1,
+                                 consumer_service_instance=1):
     """Set up iRODS catalog service consumer in a docker-compose project.
 
     Arguments:
     docker_client -- docker client for interacting with the docker-compose project
-    project_name -- name of the docker-compose project in which the server resides
+    compose_project -- compose.project in which the iRODS catalog provider is running
+    platform_image -- repo:tag for the docker image of the platform running the iRODS servers
+    database_image -- repo:tag for the docker image of the database server
     provider_service_instance -- the service instance number of the container running the iRODS
                                  catalog service provider
-    consumer_service_instance -- the service instance number of the container being targeted
+    consumer_service_instance -- the service instance number of the containers being targeted
                                  to run the iRODS catalog service consumer
     """
-    csp_container_name = context.irods_catalog_provider_container(project_name, provider_service_instance)
-    csp_container = docker_client.containers.get(csp_container_name)
+    csp_container = docker_client.containers.get(
+        context.irods_catalog_provider_container(
+            compose_project.name, provider_service_instance
+        )
+    )
 
     setup_input = (setup_input_builder()
-                    .service_account(catalog_service_role='consumer')
-                    .server_options(catalog_service_provider_host=context.container_hostname(csp_container))
-                    .build())
+        .service_account(catalog_service_role='consumer')
+        .server_options(catalog_service_provider_host=context.container_hostname(csp_container))
+        .build()
+    )
 
     logging.debug('input to setup script [{}]'.format(setup_input))
 
-    csc_container_name = context.irods_catalog_consumer_container(project_name, consumer_service_instance)
-    csc_container = docker_client.containers.get(csc_container_name)
+    csc_container = docker_client.containers.get(
+        context.irods_catalog_consumer_container(
+            compose_project.name, consumer_service_instance
+        )
+    )
 
-    logging.warning('setting up iRODS catalog consumer [{}]'.format(csc_container_name))
+    logging.warning('setting up iRODS catalog consumer [{}]'.format(csc_container.name))
 
     setup_irods_server(csc_container, setup_input)
 
-def setup_irods_catalog_consumers(docker_client, project_name, containers, irods_catalog_provider_service_instance=1):
+def setup_irods_catalog_consumers(docker_client,
+                                  compose_project,
+                                  platform_image,
+                                  database_image,
+                                  provider_service_instance=1,
+                                  consumer_service_instances=None):
     """Set up all iRODS catalog service consumers in a docker-compose project in parallel.
 
     Arguments:
     docker_client -- docker client for interacting with the docker-compose project
-    project -- compose.project.Project which manages a docker-compose project
+    compose_project -- compose.project in which the iRODS catalog provider is running
+    platform_image -- repo:tag for the docker image of the platform running the iRODS servers
+    database_image -- repo:tag for the docker image of the database server
     provider_service_instance -- the service instance for the iRODS catalog service provider
                                  running in this docker-compose project
+    consumer_service_instances -- the service instance number of the containers being targeted
+                                  to run the iRODS catalog service consumer (if None, all
+                                  containers with the iRODS catalog service consumer service
+                                  name in the docker project will be targeted)
     """
     import concurrent.futures
+
+    csc_containers = compose_project.containers(
+        service_names=[context.irods_catalog_consumer_service()])
+
+    if consumer_service_instances:
+        consumer_service_instances = [context.service_instance(c.name) for c in csc_containers
+            if context.service_instance(c.name) in consumer_service_instances]
+    else:
+        consumer_service_instances = [i + 1 for i in range(len(csc_containers))]
+
     rc = 0
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -375,25 +424,30 @@ def setup_irods_catalog_consumers(docker_client, project_name, containers, irods
             executor.submit(
                 setup_irods_catalog_consumer,
                 docker_client,
-                project_name,
-                irods_catalog_provider_service_instance,
-                (i + 1) # add 1 to match docker-compose's service instance numbering scheme
-            ): i for i in range(len(context.irods_catalog_consumer_containers(containers)))
+                compose_project,
+                platform_image,
+                database_image,
+                provider_service_instance,
+                instance
+            ): instance for instance in consumer_service_instances
         }
 
         logging.debug(futures_to_containers)
 
         for f in concurrent.futures.as_completed(futures_to_containers):
-            instance = futures_to_containers[f]
-            container_name = context.irods_catalog_consumer_container(project_name, instance + 1)
+            i = futures_to_containers[f]
+            container_name = context.irods_catalog_consumer_container(compose_project.name,
+                                                                      i + 1)
             try:
                 f.result()
                 logging.debug('setup completed successfully [{}]'.format(container_name))
 
             except Exception as e:
-                logging.error('exception raised while setting up iRODS [{}]'.format(container_name))
+                logging.error('exception raised while setting up iRODS [{}]'
+                              .format(container_name))
                 logging.error(e)
                 rc = 1
 
     if rc is not 0:
-        raise RuntimeError('failed to set up one or more catalog service consumers, ec=[{}]'.format(rc))
+        raise RuntimeError('failed to set up one or more catalog service consumers, ec=[{}]'
+                           .format(rc))

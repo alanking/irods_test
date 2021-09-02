@@ -6,6 +6,22 @@ import logging
 import context
 import execute
 
+def database_server_port(database_image):
+    """Return the default port for the database server indicated by `database_image`.
+
+    Arguments:
+    database_image -- repo:tag for the docker image of the database server
+    """
+    db = context.image_repo(database_image)
+
+    if 'postgres' in db:
+        return 5432
+    elif 'mysql' in db:
+        return 3306
+    else:
+        raise NotImplementedError('database not supported [{}]'.format(database_image))
+
+
 class database_setup_strategy(object):
     """'Base class' for strategies for database setup.
 
@@ -218,23 +234,22 @@ class mysql_database_setup_strategy(database_setup_strategy):
         return self.execute_mysql_command('SHOW DATABASES;')
 
 
-def make_strategy(database_tag, container=None, database_port=None, root_password=None):
+def make_strategy(database_image, container=None, database_port=None, root_password=None):
     """Make a database setup strategy for the given database type.
 
     Arguments:
-    database_tag -- tag for the docker image of the database service
+    database_image -- repo:tag for the docker image of the database server
     container -- docker container running the database service
     database_port -- port on which the database service is listening
     database_root_password -- password the database root user
     """
-    suffix = '_database_setup_strategy'
-    return (eval(context.image_repo(database_tag) + suffix)
-        (container, database_port, root_password)
-    )
+    strat_name = context.image_repo(database_image) + '_database_setup_strategy'
+
+    return eval(strat_name)(container, database_port, root_password)
 
 def setup_catalog(docker_client,
-                  project_name,
-                  database_tag,
+                  compose_project,
+                  database_image,
                   database_port=None,
                   service_instance=1,
                   database_name='ICAT',
@@ -245,8 +260,8 @@ def setup_catalog(docker_client,
 
     Arguments:
     docker_client -- docker client for interacting with containers
-    project_name -- name of the docker-compose project in which the database service is running
-    database_tag -- docker image tag for the database service
+    compose_project -- compose.project in which the iRODS catalog provider is running
+    database_image -- repo:tag for the docker image of the database server
     database_port -- the port on which the database service is listening
     service_instance -- service instance number for the database service being targeted
     database_name -- name of the iRODS database (for testing, this should be 'ICAT')
@@ -255,13 +270,12 @@ def setup_catalog(docker_client,
                          'testpassword')
     root_password -- password for the root database user
     """
-    logging.warning('setting up catalog [{}]'.format(project_name))
+    db_container = docker_client.containers.get(
+        context.irods_catalog_database_container(compose_project.name, service_instance))
 
-    container_name = context.irods_catalog_database_container(project_name, service_instance)
+    logging.warning('setting up catalog [{}]'.format(db_container.name))
 
-    container = docker_client.containers.get(container_name)
-
-    strat = make_strategy(database_tag, container, database_port, root_password)
+    strat = make_strategy(database_image, db_container, database_port, root_password)
 
     ec = strat.create_database(database_name)
     if ec is not 0:

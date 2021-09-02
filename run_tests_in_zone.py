@@ -121,20 +121,19 @@ if __name__ == "__main__":
 
     logs.configure(args.verbosity, os.path.join(output_directory, 'script_output.log'))
 
-    # Derive the platform image tag if it is not provided
-    if args.platform:
-        platform = args.platform
-        logging.debug('provided platform image tag [{}]'.format(platform))
-    else:
-        platform = context.platform_image_repo_and_tag(project_name)
-        logging.debug('derived platform image tag [{}]'.format(platform))
+    platform = args.platform
+    if not platform:
+        platform = context.image_repo_and_tag_string(
+            context.platform_image_repo_and_tag(project_name)
+        )
 
-    # Derive the database image tag if it is not provided
-    if args.database:
-        database = args.database
-        logging.debug('provided database image tag [{}]'.format(database))
-    else:
-        database = context.database_image_repo_and_tag(project_name)
+        logging.debug('derived os platform image tag [{}]'.format(platform))
+
+    database = args.database
+    if not database:
+        database = context.image_repo_and_tag_string(
+            context.database_image_repo_and_tag(project_name))
+
         logging.debug('derived database image tag [{}]'.format(database))
 
     ec = 0
@@ -168,11 +167,11 @@ if __name__ == "__main__":
                                                     args.package_version,
                                                     containers)
 
-        database_setup.setup_catalog(docker_client, project_name, database, p.containers())
+        database_setup.setup_catalog(docker_client, p, database)
 
-        irods_setup.setup_irods_catalog_provider(docker_client, args.project_name)
+        irods_setup.setup_irods_catalog_provider(docker_client, compose_project, platform, database)
 
-        irods_setup.setup_irods_catalog_consumers(docker_client, args.project_name, p.containers())
+        irods_setup.setup_irods_catalog_consumers(docker_client, p, platform, database)
 
         # Configure the containers for running iRODS automated tests
         logging.info('configuring iRODS containers for testing')
