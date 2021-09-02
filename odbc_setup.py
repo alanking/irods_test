@@ -98,7 +98,7 @@ def configure_mysql_odbc_driver(csp_container, odbc_driver, extension='.tar.gz')
     return container_odbc_driver_dir
 
 
-def download_mysql_odbc_driver(url, destination=None):
+def download_mysql_odbc_driver(url, destination=None, always_download=False):
     """Downloads the file indicated by `url` and returns the path to the file.
 
     Arguments:
@@ -113,13 +113,20 @@ def download_mysql_odbc_driver(url, destination=None):
         from urllib.parse import urlparse
         destination = os.path.join('/tmp', os.path.basename(urlparse(url).path))
 
+    destination = os.path.abspath(destination)
+
+    if not always_download and os.path.exists(destination):
+        logging.info('destination mysql odbc already exists, not downloading [{}]'
+                     .format(destination))
+        return destination
+
     logging.info('downloading [{}] to [{}]'.format(url, destination))
 
     with urllib.request.urlopen(url) as r:
         with open(destination, 'w+b') as f:
             shutil.copyfileobj(r, f)
 
-    return f.name
+    return destination
 
 
 def configure_odbc_driver_ubuntu_1604_mysql_57(csp_container, odbc_driver):
@@ -159,31 +166,9 @@ def configure_odbc_driver_centos_7_mysql_57(csp_container, odbc_driver):
     """
     if not odbc_driver:
         odbc_driver = download_mysql_odbc_driver(
-            #'https://downloads.mysql.com/archives/get/p/10/file/mysql-connector-odbc-5.3.13-linux-el7-x86-64bit.tar.gz')
-            'https://downloads.mysql.com/archives/get/p/10/file/mysql-connector-odbc-5.2.7-linux-el6-x86-64bit.tar.gz')
+            'https://downloads.mysql.com/archives/get/p/10/file/mysql-connector-odbc-5.3.13-linux-el7-x86-64bit.tar.gz')
 
-    driver_path = configure_mysql_odbc_driver(csp_container, os.path.abspath(odbc_driver))
-
-    # see https://dev.mysql.com/doc/connector-odbc/en/connector-odbc-installation-binary-unix-tarball.html
-    copy_odbc_drivers_to_known_locations = (
-        'cp {0}/lib/* /usr/lib64 && cp {0}/bin/* /usr/bin'.format(
-            driver_path
-            #archive.path_to_archive_in_container(odbc_driver, extension='.tar.gz')
-        )
-    )
-    ec = execute.execute_command(csp_container, 'bash -c \'{}\''.format(copy_odbc_drivers_to_known_locations))
-    if ec is not 0:
-        raise RuntimeError('failed to copy odbc drivers [{}] ec=[{}] [{}]'
-            .format(copy_odbc_drivers_to_known_locations, ec, csp_container.name))
-
-    # This is needed in order for the older MySQL ODBC connector to work (TODO: Verify)
-    link_new_odbc_drivers_to_old_drivers = textwrap.dedent('''\
-        ln -s /usr/lib64/libodbc.so.2.0.0 /usr/lib64/libodbc.so.1 && \
-        ln -s /usr/lib64/libodbcinst.so.2.0.0 /usr/lib64/libodbcinst.so.1''')
-    ec = execute.execute_command(csp_container, 'bash -c \'{}\''.format(link_new_odbc_drivers_to_old_drivers))
-    if ec is not 0:
-        raise RuntimeError('failed to symlink newer mysql ODBC drivers ec=[{}] [{}]'
-            .format(ec, csp_container.name))
+    configure_mysql_odbc_driver(csp_container, os.path.abspath(odbc_driver))
 
 
 def configure_odbc_driver(platform_image, database_image, csp_container, odbc_driver=None):
@@ -203,8 +188,6 @@ def configure_odbc_driver(platform_image, database_image, csp_container, odbc_dr
                           context.sanitize(context.image_tag(platform_image)),
                           context.sanitize(context.image_repo(database_image)),
                           context.sanitize(context.image_tag(database_image))])
-
-    logging.debug(func_name)
 
     eval(func_name)(csp_container, odbc_driver)
 
