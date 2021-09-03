@@ -8,7 +8,7 @@ import archive
 import context
 import execute
 
-def configure_postgres_odbc_driver(database_image, csp_container, odbc_driver):
+def configure_postgres_odbc_driver(csp_container, odbc_driver):
     """Configure ODBC driver for postgres.
 
     Argument:
