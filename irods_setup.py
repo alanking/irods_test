@@ -283,13 +283,14 @@ def setup_irods_server(container, setup_input):
 
     execute.execute_command(container, 'cat /input')
 
-    path_to_setup_script = os.path.join('/var', 'lib', 'irods', 'scripts', 'setup_irods.py')
+    path_to_setup_script = os.path.join(context.irods_home(), 'scripts', 'setup_irods.py')
     run_setup_script = 'bash -c \'python {0} < /input\''.format(path_to_setup_script)
     ec = execute.execute_command(container, run_setup_script)
     if ec is not 0:
         raise RuntimeError('failed to set up iRODS server [{}]'.format(container.name))
 
-    ec = execute.execute_command(container, '/var/lib/irods/irodsctl restart', user='irods')
+    irodsctl = os.path.join(context.irods_home(), 'irodsctl')
+    ec = execute.execute_command(container, '{} restart'.format(irodsctl), user='irods')
     if ec is not 0:
         raise RuntimeError('failed to start iRODS server after setup [{}]'.format(container.name))
 

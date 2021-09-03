@@ -209,7 +209,7 @@ if __name__ == "__main__":
             ec = execute.execute_command(container,
                                          command,
                                          user='irods',
-                                         workdir='/var/lib/irods',
+                                         workdir=context.irods_home(),
                                          stream_output=True)
 
             if ec is not 0:

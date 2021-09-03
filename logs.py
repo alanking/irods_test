@@ -22,10 +22,13 @@ def configure(verbosity=1, log_filename=None):
         handlers = handlers
     )
 
-def collect_logs(docker_client, containers, output_directory, logfile_path='/var/lib/irods/log'):
+def collect_logs(docker_client, containers, output_directory, logfile_path=None):
     od = os.path.join(output_directory, 'logs')
     if not os.path.exists(od):
         os.makedirs(od)
+
+    if not logfile_path:
+        logfile_path = os.path.join(context.irods_home(), 'log')
 
     for c in containers:
         if context.is_catalog_database_container(c): continue

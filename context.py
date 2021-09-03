@@ -13,6 +13,12 @@ def irods_catalog_consumer_service():
     return 'irods-catalog-consumer'
 
 
+def irods_home():
+    """Return the path to the iRODS Linux user's home directory."""
+    import os
+    return os.path.join('/var', 'lib', 'irods')
+
+
 def sanitize(repo_or_tag):
     """Sanitize the input from special characters rejected by docker-compose.
 
