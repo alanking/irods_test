@@ -37,15 +37,15 @@ def make_output_directory(dirname, basename):
     dirname -- base directory in which the unique subdirectory for output will be created
     basename -- unique subdirectory which will be created under the provided dirname
     """
-    p = os.path.join(os.path.abspath(dirname), basename)
+    directory = os.path.join(os.path.abspath(dirname), basename)
 
     try:
-        os.makedirs(p)
+        os.makedirs(directory)
     except OSError as e:
-        if e.errno != errno.EEXIST or not os.path.isdir(p):
+        if e.errno != errno.EEXIST or not os.path.isdir(directory):
             raise
 
-    return p
+    return directory
 
 
 def configure_irods_testing(docker_client, containers):
@@ -93,7 +93,11 @@ if __name__ == "__main__":
     parser.add_argument('--package-directory', metavar='PATH_TO_DIRECTORY_WITH_PACKAGES', type=str, dest='package_directory',
                         help='Path to local directory which contains iRODS packages to be installed')
     parser.add_argument('--package-version', metavar='PACKAGE_VERSION_TO_DOWNLOAD', type=str, dest='package_version',
-                        help='Version of iRODS to download and install')
+                        help='Version of iRODS to download and install. If neither --package-version or --package-directory is specified, the latest available version is used.')
+    parser.add_argument('--odbc-driver-path', metavar='PATH_TO_ODBC_DRIVER_ARCHIVE', dest='odbc_driver', type=str,
+                        help='Path to the ODBC driver archive file on the local machine. If not provided, the driver will be downloaded.')
+    parser.add_argument('--fail-fast', dest='fail_fast', action='store_true',
+                        help='If indicated, exits on the first command that returns a non-zero exit code.')
     parser.add_argument('--verbose', '-v', dest='verbosity', action='count', default=1,
                         help='Increase the level of output to stdout. CRITICAL and ERROR messages will always be printed.')
 
@@ -104,12 +108,12 @@ if __name__ == "__main__":
         exit(1)
 
     # Get the context for the Compose file
-    project_directory = os.path.abspath(args.project_directory)
-    p = compose.cli.command.get_project(project_directory, project_name=args.project_name)
+    compose_project = compose.cli.command.get_project(os.path.abspath(args.project_directory),
+                                                      project_name=args.project_name)
 
-    project_name = args.project_name if args.project_name else p.name
+    project_name = args.project_name if args.project_name else compose_project.name
 
-    job_name = job_name(p.name, args.job_name)
+    job_name = job_name(compose_project.name, args.job_name)
 
     if args.output_directory:
         dirname = args.output_directory
@@ -136,15 +140,20 @@ if __name__ == "__main__":
 
         logging.debug('derived database image tag [{}]'.format(database))
 
-    ec = 0
+    rc = 0
+    last_command_to_fail = None
     containers = list()
     docker_client = docker.from_env()
 
     try:
         # Bring up the services
-        logging.debug('bringing up project [{}]'.format(p.name))
+        logging.debug('bringing up project [{}]'.format(compose_project.name))
         consumer_count = 3
-        containers = p.up(scale_override={context.irods_catalog_consumer_service(): consumer_count})
+        containers = compose_project.up(scale_override={
+            context.irods_catalog_consumer_service(): consumer_count
+        })
+
+        # TODO: install iRODS externals packages
 
         # Install iRODS packages
         if args.package_directory:
@@ -158,7 +167,7 @@ if __name__ == "__main__":
                                                  containers)
         else:
             # Even if no version was provided, we default to using the latest official release
-            logging.warning('installing official iRODS packages [{}] (empty == latest release)'
+            logging.warning('installing official iRODS packages [{}]'
                             .format(args.package_version))
 
             install.install_official_irods_packages(docker_client,
@@ -167,11 +176,18 @@ if __name__ == "__main__":
                                                     args.package_version,
                                                     containers)
 
-        database_setup.setup_catalog(docker_client, p, database)
+        database_setup.setup_catalog(docker_client, compose_project, database)
 
-        irods_setup.setup_irods_catalog_provider(docker_client, p, platform, database)
+        irods_setup.setup_irods_catalog_provider(docker_client,
+                                                 compose_project,
+                                                 platform,
+                                                 database,
+                                                 args.odbc_driver)
 
-        irods_setup.setup_irods_catalog_consumers(docker_client, p, platform, database)
+        irods_setup.setup_irods_catalog_consumers(docker_client,
+                                                  compose_project,
+                                                  platform,
+                                                  database)
 
         # Configure the containers for running iRODS automated tests
         logging.info('configuring iRODS containers for testing')
@@ -180,13 +196,34 @@ if __name__ == "__main__":
         # Get the container on which the command is to be executed
         logging.debug('--run-on-service-instance [{}]'.format(args.run_on.split()))
         target_service_name, target_service_instance = args.run_on.split()
-        container = docker_client.containers.get(context.container_name(p.name, target_service_name, target_service_instance))
+
+        container = docker_client.containers.get(
+            context.container_name(compose_project.name,
+                                   target_service_name,
+                                   target_service_instance)
+        )
         logging.debug('got container to run on [{}]'.format(container.name))
 
         # Serially execute the list of commands provided in the input
         for command in list(args.commands):
-            # TODO: on --continue, save only failure ec's/commands
-            ec = execute.execute_command(container, command, user='irods', workdir='/var/lib/irods', stream_output=True)
+            ec = execute.execute_command(container,
+                                         command,
+                                         user='irods',
+                                         workdir='/var/lib/irods',
+                                         stream_output=True)
+
+            if ec is not 0:
+                rc = ec
+                last_command_to_fail = command
+                logging.warning('command exited with error code [{}] [{}] [{}]'
+                              .format(ec, command, container.name))
+
+                if args.fail_fast:
+                    logging.critical('command failed [{}]'.format(command))
+                    break
+
+        if rc is not 0:
+            logging.error('last command to fail [{}]'.format(last_command_to_fail))
 
     except Exception as e:
         logging.critical(e)
@@ -197,6 +234,6 @@ if __name__ == "__main__":
         logging.warning('collecting logs [{}]'.format(output_directory))
         logs.collect_logs(docker_client, containers, output_directory)
 
-        p.down(include_volumes = True, remove_image_type = False)
+        compose_project.down(include_volumes=True, remove_image_type=False)
 
-    exit(ec)
+    exit(rc)

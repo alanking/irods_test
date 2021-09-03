@@ -22,18 +22,18 @@ if __name__ == "__main__":
                         help='The repo:tag of the OS platform image to use')
     parser.add_argument('--database-image', '-d', metavar='DATABASE_IMAGE_REPO_AND_TAG', dest='database', type=str,
                         help='The repo:tag of the database image to use')
-    parser.add_argument('--exclude-catalog-setup', dest='setup_catalog', action='store_false',
-                        help='If indicated, skips the setup of iRODS tables and postgres user in the database.')
     parser.add_argument('--catalog-service-instance', metavar='CATALOG_SERVICE_INSTANCE_NUM', dest='catalog_instance', type=int, default=1,
                         help='The service instance number of the database server hosting the iRODS catalog.')
-    parser.add_argument('--exclude-irods-catalog-provider-setup', dest='setup_csp', action='store_false',
-                        help='If indicated, skips running the iRODS setup script on the catalog service provider.')
     parser.add_argument('--irods-catalog-provider-service-instance', metavar='IRODS_CATALOG_PROVIDER_INSTANCE_NUM', dest='irods_csp_instance', type=int, default=1,
                         help='The service instance number of the iRODS catalog service provider to set up.')
-    parser.add_argument('--exclude-irods-catalog-consumers-setup', dest='setup_cscs', action='store_false',
-                        help='If indicated, skips running the iRODS setup script on the catalog service consumers.')
     parser.add_argument('--irods-catalog-consumer-service-instances', metavar='IRODS_CATALOG_CONSUMER_INSTANCE_NUM', dest='irods_csc_instances', type=int, nargs='+',
                         help='The service instance numbers of the database server hosting the iRODS catalog.')
+    parser.add_argument('--exclude-catalog-setup', dest='setup_catalog', action='store_false',
+                        help='If indicated, skips the setup of iRODS tables and postgres user in the database.')
+    parser.add_argument('--exclude-irods-catalog-provider-setup', dest='setup_csp', action='store_false',
+                        help='If indicated, skips running the iRODS setup script on the catalog service provider.')
+    parser.add_argument('--exclude-irods-catalog-consumers-setup', dest='setup_cscs', action='store_false',
+                        help='If indicated, skips running the iRODS setup script on the catalog service consumers.')
     parser.add_argument('--odbc-driver-path', metavar='PATH_TO_ODBC_DRIVER_ARCHIVE', dest='odbc_driver', type=str,
                         help='Path to the ODBC driver archive file on the local machine. If not provided, the driver will be downloaded.')
     parser.add_argument('--verbose', '-v', dest='verbosity', action='count', default=1,
