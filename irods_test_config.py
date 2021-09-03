@@ -8,6 +8,40 @@ import os
 import context
 import execute
 
+def reconnect_with_alias(container, network, alias):
+    network.disconnect(container)
+    network.connect(container, aliases=[alias])
+
+
+def set_hostnames_for_irods(docker_client, compose_project):
+    # Assuming only the default network is in use for all services
+    network_name = list(compose_project.services[0].networks.keys())[0]
+    network = docker_client.networks.get(
+        list(n.id for n in docker_client.networks.list() if n.name == network_name)[0])
+
+    hosts_file = os.path.join('/etc', 'hosts')
+
+    # TODO: PARALLEL
+    containers = compose_project.containers(service_names=[
+        context.irods_catalog_provider_service(),
+        context.irods_catalog_consumer_service()])
+    for c in containers:
+        container = docker_client.containers.get(c.name)
+
+        if context.is_irods_catalog_provider_container(container):
+            alias = 'icat.example.org'
+        else:
+            alias = 'resource{}.example.org'.format(context.service_instance(c.name))
+
+        # TODO: need to have each container recognize itself as `alias`
+        # TODO: use /etc/irods/hosts_config.json!!
+        # this does not work because the docker daemon is controlling the /etc/hosts file
+        add_to_hosts_file = 'sed -i \'${{s/$/\\t{}/}}\' {}'.format(alias, hosts_file)
+        if execute.execute_command(container, add_to_hosts_file) is not 0:
+            raise RuntimeError('failed to add hostname [{}]'.format(c.name))
+
+        reconnect_with_alias(container, network, alias)
+
 def configure_univmss_script(docker_client, compose_project):
     """Configure UnivMSS script for iRODS tests.
 
@@ -15,6 +49,7 @@ def configure_univmss_script(docker_client, compose_project):
     docker_client -- docker client for interacting with the docker-compose project
     compose_project -- compose.Project in which the iRODS servers are running
     """
+    # TODO: PARALLEL
     univmss_script = os.path.join(context.irods_home(),
                                   'msiExecCmd_bin',
                                   'univMSSInterface.sh')
@@ -31,22 +66,29 @@ def configure_univmss_script(docker_client, compose_project):
         on_container = docker_client.containers.get(c.name)
         if execute.execute_command(on_container,
                                    chown_msiexec) is not 0:
-            raise RuntimeError('failed to change ownership to msiExecCmd_bin')
+            raise RuntimeError('failed to change ownership to msiExecCmd_bin [{}]'
+                               .format(c.name))
+
         if execute.execute_command(on_container,
                                    copy_from_template,
                                    user='irods',
                                    workdir=context.irods_home()) is not 0:
-            raise RuntimeError('failed to copy univMSSInterface.sh template file')
+            raise RuntimeError('failed to copy univMSSInterface.sh template file [{}]'
+                               .format(c.name))
+
         if execute.execute_command(on_container,
                                    remove_template_from_commands,
                                    user='irods',
                                    workdir=context.irods_home()) is not 0:
-            raise RuntimeError('failed to modify univMSSInterface.sh template file')
+            raise RuntimeError('failed to modify univMSSInterface.sh template file [{}]'
+                               .format(c.name))
+
         if execute.execute_command(on_container,
                                    make_script_executable,
                                    user='irods',
                                    workdir=context.irods_home()) is not 0:
-            raise RuntimeError('failed to change permissions on univMSSInterface.sh')
+            raise RuntimeError('failed to change permissions on univMSSInterface.sh [{}]'
+                               .format(c.name))
 
 
 def configure_irods_testing(docker_client, compose_project):
@@ -56,7 +98,7 @@ def configure_irods_testing(docker_client, compose_project):
     docker_client -- docker client for interacting with the docker-compose project
     compose_project -- compose.Project in which the iRODS servers are running
     """
-    # TODO: set hostnames for testing (irods tests expect icat.example.org, resource1.example.org, etc.)
+    set_hostnames_for_irods(docker_client, compose_project)
 
     configure_univmss_script(docker_client, compose_project)
 
@@ -85,7 +127,7 @@ if __name__ == "__main__":
 
     logs.configure(args.verbosity)
 
-    project_name = args.project_name if args.project_name else compose_project.name
+    project_name = args.project_name or compose_project.name
 
     platform = args.platform
     if not platform:
